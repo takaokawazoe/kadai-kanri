@@ -88,7 +88,42 @@ main{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
 .resizer{position:absolute;right:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:4}
 .resizer:hover,.resizer.drag{background:var(--accent);opacity:.4}
 .grid th{position:sticky}
-.grid td{background:var(--surface);cursor:default}
+.grid td{background:var(--surface);cursor:default;vertical-align:top;padding-top:6px;padding-bottom:6px;line-height:20px}
+.grid td.c-no{padding-left:2px;padding-right:2px}
+.no-cell{display:flex;align-items:center;gap:1px}
+.grip{cursor:grab;color:var(--muted);opacity:0;width:14px;text-align:center;user-select:none;font-size:11px;letter-spacing:-3px;flex:none;padding-right:3px}
+.row-menu{border:none;background:none;color:var(--muted);opacity:0;padding:0 5px;border-radius:4px;margin-left:auto;line-height:20px}
+.grid tr:hover .grip,.grid tr:hover .row-menu,.grid td.sel .grip,.grid td.sel .row-menu{opacity:1}
+.row-menu:hover{background:var(--hover);color:var(--text)}
+.tw{display:flex;align-items:flex-start;gap:4px;min-width:0}
+.tw .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto}
+.tg{border:none;background:none;width:16px;height:20px;padding:0;color:var(--text-2);flex:none;border-radius:3px;font-size:9px}
+.tg:hover{background:var(--hover);color:var(--text)}
+.tg-sp{width:16px;flex:none;color:var(--muted);text-align:center}
+.kids{font-size:11px;color:var(--text-2);border:1px solid var(--border-strong);border-radius:999px;padding:0 6px;flex:none;line-height:16px;margin-top:2px;background:#fff;font-variant-numeric:tabular-nums}
+.grid tr.ctx td{opacity:.5}
+.grid td.t-longtext{white-space:normal}
+.lt-wrap{display:flex;gap:4px;align-items:flex-start}
+.lt{white-space:pre-wrap;word-break:break-word;flex:1;min-width:0}
+.lt.one{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+.lt-more{color:var(--muted);font-size:12px;flex:none}
+.lt-tg{border:none;background:none;color:var(--muted);font-size:9px;width:18px;height:20px;padding:0;border-radius:3px;flex:none;margin-left:auto}
+.lt-tg:hover{background:var(--hover);color:var(--text)}
+.lnk{color:var(--accent-ink);text-decoration:none}
+.lnk:hover{text-decoration:underline}
+.drop-line{position:fixed;height:2px;background:var(--accent);z-index:70;pointer-events:none;border-radius:2px;display:none}
+.drop-line::before{content:'';position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.grid tr.dragging td{opacity:.35}
+body.row-dragging,body.row-dragging *{cursor:grabbing!important}
+.kc-parent{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc-kids{font-size:11px;color:var(--text-2);margin-left:6px}
+.kcard.drop-before{box-shadow:0 -3px 0 0 var(--accent)}
+.kcards.drop-end::after{content:'';display:block;height:3px;background:var(--accent);border-radius:2px;flex:none}
+.kc-lt{white-space:pre-wrap;word-break:break-word}
+.link-in{display:grid;gap:6px}
+.kid-list{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.kid-list button{display:flex;gap:8px;align-items:center;border:none;background:none;padding:3px 6px;border-radius:5px;text-align:left}
+.kid-list button:hover{background:var(--hover)}
 .grid .c-no{position:sticky;left:0;z-index:2}
 .grid thead .c-no{z-index:4}
 .grid td.c-no{box-shadow:inset -1px 0 0 var(--border)}
@@ -307,7 +342,7 @@ const RULE_BG = ['#fde2e1', '#fde8d9', '#fff4c9', '#dff3df', '#deebfb', '#ebe7fb
 const RULE_FG = ['#b42318', '#9a4a00', '#1e6b1e', '#1c5cab', '#5b3fc4', '#8a8984', '#1d1d1b'];
 const TYPES = {
   text: '1行テキスト', longtext: '複数行テキスト', number: '数値', date: '日付',
-  select: '選択肢（1つ）', multiselect: '選択肢（複数）', user: '人', checkbox: 'チェックボックス',
+  select: '選択肢（1つ）', multiselect: '選択肢（複数）', user: '人', checkbox: 'チェックボックス', link: 'リンク（URL）',
 };
 const SYS_PROP = { no: 'no', createdAt: 'createdAt', createdBy: 'createdBy', updatedAt: 'updatedAt', updatedBy: 'updatedBy' };
 
@@ -333,7 +368,7 @@ function relTime(ms) {
   if (s < 86400 * 7) return Math.floor(s / 86400) + '日前';
   return fmtDateTime(ms).slice(0, 10);
 }
-const isEmpty = v => v == null || v === '' || v === false || (Array.isArray(v) && v.length === 0);
+const isEmpty = v => v == null || v === '' || v === false || (Array.isArray(v) && v.length === 0) || (typeof v === 'object' && !Array.isArray(v) && !v.url);
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 保存できない環境では無視 */ } },
@@ -392,7 +427,9 @@ function normalize(d) {
   d.fields = Array.isArray(d.fields) ? d.fields : def.fields;
   d.rules = Array.isArray(d.rules) ? d.rules : [];
   d.issues = Array.isArray(d.issues) ? d.issues : [];
-  for (const i of d.issues) if (!i.values) i.values = {};
+  for (const i of d.issues) { if (!i.values) i.values = {}; if (typeof i.rank !== 'number') i.rank = i.no || 0; }
+  const nf = d.fields.find(f => f.id === 'no');
+  if (nf && (!nf.width || nf.width < 96)) nf.width = 100;
   return d;
 }
 
@@ -409,10 +446,19 @@ let me = LS.get('kk-user', '');
 const prefs = Object.assign({ autosave: true, view: 'table' }, LS.get('kk-prefs', {}));
 const ui = {
   view: prefs.view || 'table', search: '', quick: 'all', filters: {},
-  sort: { fid: 'no', dir: 1 }, sel: null, editing: null, rowIds: [], colIds: [],
+  sort: { fid: null, dir: 1 }, sel: null, editing: null, rowIds: [], colIds: [], ltOpen: new Map(),
 };
 const file = { handle: null, name: '', lastModified: 0, perm: false, saving: false, again: false, pendingRemote: null, error: '' };
 let storedHandle = null;
+const collapsedKey = () => 'kk-collapsed-' + doc.meta.fileId;
+let collapsedParents = new Set(LS.get(collapsedKey(), []));
+const saveCollapsed = () => LS.set(collapsedKey(), [...collapsedParents]);
+// 複数行テキスト：列ごとの既定（全行／1行）と、セルごとの切り替え
+function ltCollapsed(iid, fid) {
+  const k = iid + ':' + fid;
+  if (ui.ltOpen.has(k)) return ui.ltOpen.get(k);
+  return !!(prefs.ltCollapsed || {})[fid];
+}
 
 const activeFields = () => doc.fields.filter(f => !f.deleted).sort((a, b) => a.order - b.order);
 const visibleFields = () => activeFields().filter(f => !f.hidden);
@@ -437,10 +483,101 @@ function fmt(f, v) {
     case 'date': return String(v).replace(/-/g, '/');
     case 'datetime': return fmtDateTime(v);
     case 'number': return Number(v).toLocaleString('ja-JP', { maximumFractionDigits: 10 });
+    case 'link': return v.title || prettyUrl(v.url);
     default: return String(v);
   }
 }
+/* ---------- リンク ---------- */
+function safeHref(u) { const s = String(u || '').trim(); return /^(https?:|mailto:|file:)/i.test(s) ? s : null; }
+function prettyUrl(u) {
+  try {
+    const x = new URL(u);
+    if (x.protocol === 'mailto:') return x.pathname;
+    let path = decodeURIComponent(x.pathname + x.search);
+    if (path === '/') path = '';
+    const s = x.host + path;
+    return s.length > 70 ? s.slice(0, 68) + '…' : s;
+  } catch (e) { return String(u || ''); }
+}
+function parseLinkText(raw) {
+  const t = String(raw || '').trim();
+  if (!t) return null;
+  const m = t.match(/^(.*?)[\s(（<「]*((?:https?:\/\/|mailto:|file:)[^\s)）>」]+)[\s)）>」]*(.*)$/i);
+  if (m) { const title = (m[1] + ' ' + m[3]).trim(); return { url: m[2], title: title === m[2] ? '' : title }; }
+  if (/^\\\\[^\\]/.test(t)) return { url: 'file:' + t.replace(/\\/g, '/'), title: '' };   // \\server\share
+  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(t) && !/^\d+(\.\d+)*$/.test(t)) return { url: 'https://' + t, title: '' };
+  return null;
+}
+// ドラッグ＆ドロップや貼り付けのデータから、リンク（とページのタイトル）を取り出す
+function linkFromData(dt) {
+  if (!dt) return null;
+  const html = dt.getData('text/html');
+  if (html) {
+    const a = new DOMParser().parseFromString(html, 'text/html').querySelector('a[href]');
+    if (a && safeHref(a.getAttribute('href'))) {
+      const href = a.getAttribute('href'), text = (a.textContent || '').trim().replace(/\s+/g, ' ');
+      return { url: href, title: text === href ? '' : text };
+    }
+  }
+  const uri = (dt.getData('text/uri-list') || '').split(/\r?\n/).find(x => x && !x.startsWith('#'));
+  return parseLinkText(uri || dt.getData('text/plain'));
+}
+async function fetchTitle(url) {
+  if (!/^https?:/i.test(url)) return null;
+  try {
+    const ctl = new AbortController();
+    const tm = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch(url, { mode: 'cors', credentials: 'omit', signal: ctl.signal });
+    clearTimeout(tm);
+    if (!r.ok || !/html/i.test(r.headers.get('content-type') || '')) return null;
+    const buf = await r.arrayBuffer();
+    let cs = ((r.headers.get('content-type') || '').match(/charset=([\w-]+)/i) || [])[1];
+    if (!cs) cs = ((new TextDecoder('latin1').decode(buf.slice(0, 4096))).match(/<meta[^>]+charset=["']?([\w-]+)/i) || [])[1] || 'utf-8';
+    let html;
+    try { html = new TextDecoder(cs).decode(buf); } catch (e) { html = new TextDecoder('utf-8').decode(buf); }
+    const d = new DOMParser().parseFromString(html, 'text/html');
+    const og = d.querySelector('meta[property="og:title"]');
+    const t = ((og && og.getAttribute('content')) || d.title || '').trim().replace(/\s+/g, ' ');
+    return t || null;
+  } catch (e) { return null; }
+}
+const titleCache = new Map();
+function getTitle(url) { if (!titleCache.has(url)) titleCache.set(url, fetchTitle(url)); return titleCache.get(url); }
+// タイトルが空のリンクについて、ページのタイトルを取りに行く（取れたら自動で入れる）
+function queueTitles() {
+  const lf = activeFields().filter(f => f.type === 'link');
+  if (!lf.length) return;
+  const urls = new Set();
+  for (const i of activeIssues()) for (const f of lf) { const v = i.values[f.id]; if (v && v.url && !v.title && /^https?:/i.test(v.url) && !titleCache.has(v.url)) urls.add(v.url); }
+  for (const u of urls) getTitle(u).then(t => {
+    if (!t) return;
+    let ch = false;
+    for (const i of activeIssues()) for (const f of lf) { const v = i.values[f.id]; if (v && v.url === u && !v.title) { v.title = t; touch(i); ch = true; } }
+    if (ch && !ui.editing) changed();
+  });
+}
 const displayText = (i, f) => fmt(f, getVal(i, f));
+const byRank = (a, b) => (a.rank - b.rank) || (a.no - b.no);
+
+/* ---------- 親子（2階層） ---------- */
+function treeInfo() {
+  const all = activeIssues();
+  const byId = new Map(all.map(i => [i.id, i]));
+  const hasLiveParent = i => !!(i.parent && i.parent !== i.id && byId.has(i.parent));
+  // 親が見つからない・親自身にも親がいる（3階層目）の場合は最上位として扱う
+  const parentOf = i => { if (!hasLiveParent(i)) return null; const p = byId.get(i.parent); return hasLiveParent(p) ? null : p; };
+  const kids = new Map();
+  for (const i of all) { const p = parentOf(i); if (p) { if (!kids.has(p.id)) kids.set(p.id, []); kids.get(p.id).push(i); } }
+  return { all, byId, parentOf, kids };
+}
+function groupSibs(i, t = treeInfo()) {
+  const p = t.parentOf(i);
+  return (p ? (t.kids.get(p.id) || []) : t.all.filter(x => !t.parentOf(x))).filter(x => x.id !== i.id).sort(byRank);
+}
+function placeAt(i, sibs, idx) {
+  const prev = sibs[idx - 1], next = sibs[idx];
+  i.rank = prev && next ? (prev.rank + next.rank) / 2 : prev ? prev.rank + 1 : next ? next.rank - 1 : 0;
+}
 function pill(o) { return `<span class="pill" style="--c:${esc(o.color || '#8a8984')}">${esc(o.label)}</span>`; }
 
 function statusField() { return fieldById('status'); }
@@ -472,7 +609,7 @@ const OPS = {
 };
 function opsFor(f) {
   if (!f) return [];
-  if (f.type === 'longtext' || f.type === 'user') return OPS.text;
+  if (f.type === 'longtext' || f.type === 'user' || f.type === 'link') return OPS.text;
   if (f.type === 'no') return OPS.number;
   if (f.type === 'datetime') return OPS.date;
   return OPS[f.type] || OPS.text;
@@ -481,7 +618,7 @@ function testCond(i, c) {
   const f = fieldById(c.fieldId);
   if (!f) return false;
   const v = getVal(i, f);
-  const s = String(v == null ? '' : v).toLowerCase();
+  const s = (f.type === 'link' ? (v ? (v.title || '') + ' ' + (v.url || '') : '') : String(v == null ? '' : v)).toLowerCase();
   const cv = String(c.value == null ? '' : c.value).toLowerCase();
   const n = Number(v), cn = Number(c.value);
   const hasNum = v !== '' && v != null && !isNaN(n);
@@ -612,6 +749,11 @@ function convertInput(f, raw, autoAdd) {
     }
     case 'checkbox': return { ok: true, value: /^(true|1|yes|y|on|はい|○|〇|◯|✓|✔|済|済み|x)$/i.test(t) };
     case 'longtext': return { ok: true, value: s.replace(/\s+$/, '') };
+    case 'link': {
+      if (!t) return { ok: true, value: null };
+      const l = parseLinkText(t);
+      return l ? { ok: true, value: l } : { ok: false };
+    }
     default: return { ok: true, value: t };
   }
 }
@@ -646,10 +788,12 @@ function setValuesIn(i, patch) {
   if (changed) touch(i);
   return changed;
 }
-function newIssue(values) {
+function newIssue(values, parent) {
   const now = Date.now();
   const st = statusField();
-  const i = { id: uid(), no: nextNo(), values: {}, createdAt: now, createdBy: me || '（名前未設定）', updatedAt: now, updatedBy: me || '（名前未設定）' };
+  const rank = doc.issues.reduce((m, x) => Math.max(m, typeof x.rank === 'number' ? x.rank : 0), 0) + 1;
+  const i = { id: uid(), no: nextNo(), rank, values: {}, createdAt: now, createdBy: me || '（名前未設定）', updatedAt: now, updatedBy: me || '（名前未設定）' };
+  if (parent) i.parent = parent;
   if (st && st.options && st.options[0]) i.values.status = st.options[0].id;
   for (const k in values || {}) if (!isEmpty(values[k])) i.values[k] = values[k];
   doc.issues.push(i);
@@ -669,14 +813,14 @@ function mutate(fn) {
 }
 function undo() { if (!undoStack.length) return toast('元に戻せる操作がありません'); redoStack.push(snapshot()); restore(undoStack.pop()); changed(); }
 function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); changed(); }
-function changed() { renderAll(); scheduleAutosave(); }
+function changed() { renderAll(); scheduleAutosave(); queueTitles(); }
 function setValues(iid, patch) { mutate(() => { const i = issueById(iid); if (i) setValuesIn(i, patch); }); }
 
 /* ============================================================
    マージ
    ============================================================ */
 function flatIssue(i) {
-  const o = { no: i.no, deleted: !!i.deleted, createdAt: i.createdAt, createdBy: i.createdBy };
+  const o = { no: i.no, deleted: !!i.deleted, createdAt: i.createdAt, createdBy: i.createdBy, parent: i.parent || null, rank: i.rank };
   for (const k in i.values) o['v.' + k] = i.values[k];
   return o;
 }
@@ -725,6 +869,7 @@ function mergeDocs(b, l, r, opts = {}) {
         if (k.startsWith('v.')) i.values[k.slice(2)] = x.flat[k]; else i[k] = x.flat[k];
       }
       if (!i.deleted) delete i.deleted;
+      if (!i.parent) delete i.parent;
       const newer = (x.r.updatedAt || 0) > (x.l.updatedAt || 0) ? x.r : x.l;
       i.updatedAt = newer.updatedAt; i.updatedBy = newer.updatedBy;
       return i;
@@ -1057,6 +1202,7 @@ function renderToolbar() {
   const pos = keepFocus ? document.activeElement.selectionStart : 0;
   let h = `<input class="search" id="searchBox" type="search" placeholder="検索" value="${esc(ui.search)}">`;
   h += '<div class="qchips">' + QUICK.filter(q => q[0] !== 'mine' || fieldById(doc.settings.assigneeField)).map(q => `<button class="qchip${ui.quick === q[0] ? ' on' : ''}" data-quick="${q[0]}">${q[1]}</button>`).join('') + '</div>';
+  if (ui.sort.fid && fieldById(ui.sort.fid)) h += `<span class="fchip" data-tip="解除すると手動の並び順に戻ります">並べ替え: ${esc(fieldById(ui.sort.fid).name)} ${ui.sort.dir > 0 ? '▲' : '▼'}<button data-act="clearSort" aria-label="並べ替えを解除">×</button></span>`;
   for (const fid in ui.filters) { const f = fieldById(fid); if (f) h += `<span class="fchip">${esc(f.name)}: ${ui.filters[fid].length}件の値<button data-act="clearFilter" data-fid="${esc(fid)}" aria-label="フィルタを解除">×</button></span>`; }
   h += `<span class="count" id="countLbl"></span><span style="flex:1"></span>`;
   if (ui.view === 'kanban') {
@@ -1089,8 +1235,35 @@ function sortKey(i, f) {
     case 'multiselect': return Math.min(...v.map(id => (f.options || []).findIndex(o => o.id === id)));
     case 'number': case 'no': case 'datetime': return Number(v);
     case 'checkbox': return v ? 1 : 0;
+    case 'link': return fmt(f, v);
     default: return String(v);
   }
+}
+function cmpIssues(a, b) {
+  if (!ui.sort.fid) return byRank(a, b);
+  const f = fieldById(ui.sort.fid) || fieldById('no');
+  const x = sortKey(a, f), y = sortKey(b, f);
+  if (x === null && y === null) return byRank(a, b);
+  if (x === null) return 1;
+  if (y === null) return -1;
+  const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ja');
+  return c ? c * ui.sort.dir : byRank(a, b);
+}
+// 表示する行：親 → その子、の順。子だけが条件に合うときは親も（薄く）表示する
+function treeRows(matched, { expandAll } = {}) {
+  const t = treeInfo();
+  const m = new Set(matched.map(i => i.id));
+  const tops = t.all.filter(i => !t.parentOf(i)).sort(cmpIssues);
+  const rows = [];
+  for (const T of tops) {
+    const ks = (t.kids.get(T.id) || []).slice().sort(cmpIssues);
+    const mk = ks.filter(k => m.has(k.id));
+    if (!m.has(T.id) && !mk.length) continue;
+    const collapsed = !expandAll && ks.length > 0 && collapsedParents.has(T.id);
+    rows.push({ i: T, depth: 0, ctx: !m.has(T.id), kids: ks, collapsed });
+    if (!collapsed) for (const k of mk) rows.push({ i: k, depth: 1, parent: T });
+  }
+  return { rows, t };
 }
 function filteredIssues() {
   let list = activeIssues();
@@ -1106,53 +1279,68 @@ function filteredIssues() {
     list = list.filter(i => filterKeys(i, f).some(k => set.has(k)));
   }
   const s = ui.search.trim().toLowerCase();
-  if (s) { const fs = activeFields(); list = list.filter(i => fs.some(f => displayText(i, f).toLowerCase().includes(s))); }
-  const f = fieldById(ui.sort.fid) || fieldById('no');
-  const dir = ui.sort.dir;
-  const keyed = list.map(i => [sortKey(i, f), i]);
-  keyed.sort((a, b) => {
-    const x = a[0], y = b[0];
-    if (x === null && y === null) return a[1].no - b[1].no;
-    if (x === null) return 1;
-    if (y === null) return -1;
-    const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ja');
-    return c ? c * dir : a[1].no - b[1].no;
-  });
-  return keyed.map(k => k[1]);
+  if (s) { const fs = activeFields(); list = list.filter(i => fs.some(f => displayText(i, f).toLowerCase().includes(s) || (f.type === 'link' && i.values[f.id] && String(i.values[f.id].url).toLowerCase().includes(s)))); }
+  return list;
 }
 
 /* ---------- 一覧 ---------- */
 function cellHtml(i, f) {
   const v = getVal(i, f);
-  if (f.id === 'no') return `<button class="no-link" data-act="open" data-iid="${i.id}" data-tip="詳細を開く">#${v}</button>`;
+  if (f.id === 'no') return `<div class="no-cell"><span class="grip" data-grip="${i.id}" data-tip="ドラッグで並べ替え">⋮⋮</span><button class="no-link" data-act="open" data-iid="${i.id}" data-tip="詳細を開く">#${v}</button><button class="row-menu" data-act="rowmenu" data-iid="${i.id}" aria-label="行のメニュー">⋯</button></div>`;
   switch (f.type) {
     case 'select': { const o = optById(f, v); return o ? pill(o) : ''; }
     case 'multiselect': return (v || []).map(id => optById(f, id)).filter(Boolean).map(pill).join(' ');
     case 'checkbox': return `<span class="cb${v ? ' on' : ''}" data-act="toggle">${v ? '✓' : ''}</span>`;
-    case 'longtext': { const s = String(v || ''); const first = s.split('\n')[0]; return esc(first) + (s.includes('\n') ? ' <span class="muted">…</span>' : ''); }
+    case 'longtext': {
+      const s = String(v || '');
+      if (!s) return '';
+      const lines = s.split('\n');
+      if (lines.length < 2) return `<div class="lt">${esc(s)}</div>`;
+      const one = ltCollapsed(i.id, f.id);
+      const btn = `<button class="lt-tg" data-act="lttg" data-iid="${i.id}" data-fid="${esc(f.id)}" data-tip="${one ? 'すべての行を表示' : '1行だけ表示'}">${one ? '▶' : '▼'}</button>`;
+      return one ? `<div class="lt-wrap"><div class="lt one">${esc(lines[0])}</div><span class="lt-more">他${lines.length - 1}行</span>${btn}</div>` : `<div class="lt-wrap"><div class="lt">${esc(s)}</div>${btn}</div>`;
+    }
+    case 'link': {
+      if (!v || !v.url) return '';
+      const href = safeHref(v.url);
+      return href ? `<a class="lnk" href="${esc(href)}" target="_blank" rel="noopener noreferrer" data-tip="${esc(v.url)}">${esc(fmt(f, v))}</a>` : esc(fmt(f, v));
+    }
     default: return esc(fmt(f, v));
   }
 }
+function titleCell(r) {
+  const i = r.i;
+  let pre;
+  if (r.depth === 0) pre = r.kids.length ? `<button class="tg" data-act="tg" data-iid="${i.id}" data-tip="${r.collapsed ? '子の課題を表示' : '子の課題を隠す'}">${r.collapsed ? '▶' : '▼'}</button>` : '<span class="tg-sp"></span>';
+  else pre = '<span class="tg-sp"></span><span class="tg-sp">↳</span>';
+  let badge = '';
+  if (r.depth === 0 && r.kids.length) { const done = r.kids.filter(k => !isOpen(k)).length; badge = `<span class="kids" data-tip="子の課題 ${r.kids.length}件中 ${done}件が完了">${done}/${r.kids.length}</span>`; }
+  return `<div class="tw">${pre}<span class="tt">${esc(i.values.title || '')}</span>${badge}</div>`;
+}
 function renderTable() {
   const fields = visibleFields();
-  const rows = filteredIssues();
-  ui.rowIds = rows.map(i => i.id); ui.colIds = fields.map(f => f.id);
-  const cl = $('#countLbl'); if (cl) cl.textContent = `${rows.length} / ${activeIssues().length}件`;
+  const matched = filteredIssues();
+  const { rows } = treeRows(matched);
+  ui.rowIds = rows.map(r => r.i.id); ui.colIds = fields.map(f => f.id);
+  const cl = $('#countLbl'); if (cl) cl.textContent = `${matched.length} / ${activeIssues().length}件`;
   let wrap = $('#tableWrap');
   if (!wrap) { main.innerHTML = '<div class="table-wrap" id="tableWrap"></div>'; wrap = $('#tableWrap'); }
   let h = '<table class="grid"><colgroup>' + fields.map(f => `<col style="width:${f.width || 120}px">`).join('') + '<col style="width:44px"></colgroup><thead><tr>';
   for (const f of fields) {
-    const ind = ui.sort.fid === f.id && f.id !== 'no' ? (ui.sort.dir > 0 ? '▲' : '▼') : (f.id === 'no' && ui.sort.dir < 0 && ui.sort.fid === 'no' ? '▼' : '');
+    const ind = ui.sort.fid === f.id ? (ui.sort.dir > 0 ? '▲' : '▼') : '';
     const filt = ui.filters[f.id] ? ' filtered' : '';
-    h += `<th data-fid="${esc(f.id)}" class="${f.id === 'no' ? 'c-no' : ''}${filt}"><div class="th-in"><span class="th-name" data-act="sort" data-fid="${esc(f.id)}" title="${esc(f.name)}（クリックで並べ替え）">${esc(f.name)}</span><span class="th-ind">${ind}${filt ? ' ⏷' : ''}</span><button class="th-btn" data-act="colmenu" data-fid="${esc(f.id)}" aria-label="列のメニュー">▾</button></div><span class="resizer" data-fid="${esc(f.id)}"></span></th>`;
+    const lc = !!(prefs.ltCollapsed || {})[f.id];
+    const ltBtn = f.type === 'longtext' ? `<button class="th-btn" data-act="ltcol" data-fid="${esc(f.id)}" data-tip="${lc ? 'この列をすべての行で表示' : 'この列を1行だけの表示にする'}">${lc ? '⊞' : '⊟'}</button>` : '';
+    h += `<th data-fid="${esc(f.id)}" class="${f.id === 'no' ? 'c-no' : ''}${filt}"><div class="th-in"><span class="th-name" data-act="sort" data-fid="${esc(f.id)}" title="${esc(f.name)}（クリックで並べ替え）">${esc(f.name)}</span><span class="th-ind">${ind}${filt ? ' ⏷' : ''}</span>${ltBtn}<button class="th-btn" data-act="colmenu" data-fid="${esc(f.id)}" aria-label="列のメニュー">▾</button></div><span class="resizer" data-fid="${esc(f.id)}"></span></th>`;
   }
   h += '<th class="c-add"><button class="th-add" data-act="addfield" data-tip="項目（列）を追加">＋</button></th></tr></thead><tbody>';
-  for (const i of rows) {
+  for (const r of rows) {
+    const i = r.i;
     const rs = ruleStyles(i);
-    h += `<tr data-iid="${i.id}">`;
+    h += `<tr data-iid="${i.id}" class="d${r.depth}${r.ctx ? ' ctx' : ''}">`;
     for (const f of fields) {
       const cls = `t-${f.type}${f.id === 'no' ? ' c-no' : ''}${f.readonly ? ' ro' : ''}`;
-      h += `<td data-iid="${i.id}" data-fid="${esc(f.id)}" class="${cls}" style="${styleCss(cellStyle(rs, f.id))}">${cellHtml(i, f)}</td>`;
+      h += `<td data-iid="${i.id}" data-fid="${esc(f.id)}" class="${cls}" style="${styleCss(cellStyle(rs, f.id))}">${f.id === 'title' ? titleCell(r) : cellHtml(i, f)}</td>`;
     }
     h += '<td class="c-add"></td></tr>';
   }
@@ -1210,6 +1398,7 @@ function startEdit(iid, fid, initial) {
   if (!td) return;
   td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   if (f.type === 'select' || f.type === 'multiselect' || f.type === 'user') return openChoice(td, i, f, initial);
+  if (f.type === 'link') return openLinkEditor(td, i, f, initial);
   const r = td.getBoundingClientRect();
   const long = f.type === 'longtext';
   const ed = document.createElement(long ? 'textarea' : 'input');
@@ -1251,7 +1440,7 @@ catcher.addEventListener('compositionstart', () => {
   const r = td.getBoundingClientRect();
   catcher.className = 'cell-editor';
   Object.assign(catcher.style, { left: r.left + 'px', top: r.top + 'px', width: Math.max(r.width, 140) + 'px', height: (f.type === 'longtext' ? 140 : r.height) + 'px' });
-  ui.editing = { iid: ui.sel.iid, fid: ui.sel.fid, el: catcher, catcher: true, long: f.type === 'longtext', choiceAfter: f.type === 'select' || f.type === 'multiselect' || f.type === 'user' };
+  ui.editing = { iid: ui.sel.iid, fid: ui.sel.fid, el: catcher, catcher: true, long: f.type === 'longtext', choiceAfter: f.type === 'select' || f.type === 'multiselect' || f.type === 'user' || f.type === 'link' };
 });
 catcher.addEventListener('compositionend', () => {
   const e = ui.editing;
@@ -1259,7 +1448,7 @@ catcher.addEventListener('compositionend', () => {
   const v = catcher.value;
   ui.editing = null; resetCatcher();
   const td = cellEl(e.iid, e.fid), i = issueById(e.iid), f = fieldById(e.fid);
-  if (td && i && f) openChoice(td, i, f, v);
+  if (td && i && f) (f.type === 'link' ? openLinkEditor : openChoice)(td, i, f, v);
 });
 catcher.addEventListener('keydown', e => { if (ui.editing && ui.editing.catcher) editorKey(e, ui.editing.long); });
 catcher.addEventListener('blur', () => { if (ui.editing && ui.editing.catcher) endEdit(true); });
@@ -1351,6 +1540,205 @@ function openChoice(anchor, i, f, initial) {
   inp.focus();
 }
 
+/* ---------- リンクの編集 ---------- */
+function openLinkEditor(anchor, i, f, initial) {
+  const v = getVal(i, f) || {};
+  const pop = openPopover(anchor, `<div style="width:340px"><div class="sec">URL</div><input class="pop-search" data-k="url" placeholder="https://…（リンクの貼り付け・ドラッグもできます）"><div class="sec">表示する名前</div><input class="pop-search" data-k="title" placeholder="空欄ならページのタイトルを自動で取得"><div class="hint" data-k="st" style="padding:0 2px;min-height:18px"></div><div class="pop-foot">${v.url ? '<button class="btn sm danger" data-k="del" style="margin-right:auto">リンクを削除</button>' : ''}<button class="btn sm" data-k="fetch">タイトルを取得</button><button class="btn sm primary" data-k="ok">OK</button></div></div>`, { minWidth: 360, onClose: () => finish() });
+  ui.editing = { iid: i.id, fid: f.id, el: pop, choice: true };
+  const u = $('[data-k=url]', pop), ti = $('[data-k=title]', pop), st = $('[data-k=st]', pop);
+  u.value = initial != null ? initial : (v.url || '');
+  ti.value = v.title || '';
+  let commit = true, del = false, titleTouched = !!v.title, seq = 0;
+  async function tryFetch(force) {
+    const l = parseLinkText(u.value);
+    if (!l) { st.textContent = u.value.trim() ? 'URLとして読み取れません' : ''; return; }
+    if (l.title && (!titleTouched || force)) { ti.value = l.title; titleTouched = true; }
+    if (titleTouched && !force) return;
+    if (!/^https?:/i.test(l.url)) return;
+    const my = ++seq;
+    st.textContent = 'ページのタイトルを取得しています…';
+    const t = await getTitle(l.url);
+    if (!pop.isConnected || my !== seq) return;
+    if (t) { ti.value = t; titleTouched = true; st.textContent = ''; }
+    else st.textContent = 'このページのタイトルは自動で取得できませんでした。表示する名前を入力してください（空欄ならURLを表示します）。';
+  }
+  ti.addEventListener('input', () => { titleTouched = !!ti.value.trim(); });
+  u.addEventListener('change', () => tryFetch(false));
+  u.addEventListener('paste', e => {
+    const l = linkFromData(e.clipboardData);
+    if (l && l.title) { e.preventDefault(); u.value = l.url; ti.value = l.title; titleTouched = true; st.textContent = ''; }
+    else setTimeout(() => tryFetch(false), 0);
+  });
+  pop.addEventListener('dragover', e => e.preventDefault());
+  pop.addEventListener('drop', e => {
+    const l = linkFromData(e.dataTransfer); if (!l) return;
+    e.preventDefault(); u.value = l.url;
+    if (l.title) { ti.value = l.title; titleTouched = true; st.textContent = ''; } else tryFetch(false);
+  });
+  pop.addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); closePopover(); moveSel(1, 0); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); commit = false; closePopover(); }
+  });
+  pop.addEventListener('click', e => {
+    const k = e.target.dataset.k;
+    if (k === 'ok') closePopover();
+    if (k === 'del') { del = true; closePopover(); }
+    if (k === 'fetch') { titleTouched = false; tryFetch(true); }
+  });
+  function finish() {
+    ui.editing = null;
+    if (commit) mutate(() => {
+      const iss = issueById(i.id); if (!iss) return;
+      const raw = u.value.trim();
+      if (del || !raw) { setValuesIn(iss, { [f.id]: null }); return; }
+      const l = parseLinkText(raw);
+      if (!l) { toast(`「${raw}」はURLとして読み取れませんでした`, true); return; }
+      l.title = ti.value.trim();
+      setValuesIn(iss, { [f.id]: l });
+    });
+    focusCatcher();
+    afterEdit();
+  }
+  u.focus();
+  if (initial == null) u.select();
+}
+
+/* ---------- 行の操作（並べ替え・親子） ---------- */
+function ensureManual() {
+  if (!ui.sort.fid) return false;
+  ui.sort = { fid: null, dir: 1 };
+  toast('並べ替えを解除して、手動の並び順に戻しました');
+  return true;
+}
+function moveRow(iid, d) {
+  const i = issueById(iid); if (!i) return;
+  if (ensureManual()) { renderAll(); }
+  const sibs = groupSibs(i);
+  const all = sibs.concat([i]).sort(byRank);
+  const n = all.indexOf(i), m = n + d;
+  if (m < 0 || m >= all.length) return;
+  mutate(() => { placeAt(i, sibs, m); });   // sibs は自分を除いた並びなので、m 番目に入れればよい
+}
+function indentRow(iid) {
+  const i = issueById(iid); if (!i) return;
+  const t = treeInfo();
+  if (t.parentOf(i)) return toast('すでに子の課題です（2階層まで）');
+  if ((t.kids.get(i.id) || []).length) return toast('子の課題を持っているため、他の課題の子にはできません（2階層まで）', true);
+  ensureManual();
+  const tops = t.all.filter(x => !t.parentOf(x)).sort(byRank);
+  const n = tops.indexOf(i);
+  if (n <= 0) return toast('上に課題がないため、子にできません');
+  const np = tops[n - 1];
+  mutate(() => { i.parent = np.id; const ks = (t.kids.get(np.id) || []).sort(byRank); placeAt(i, ks, ks.length); touch(i); });
+  collapsedParents.delete(np.id); saveCollapsed(); renderView();
+}
+function outdentRow(iid) {
+  const i = issueById(iid); if (!i) return;
+  const t = treeInfo();
+  const p = t.parentOf(i);
+  if (!p) return toast('最上位の課題です');
+  ensureManual();
+  const tops = t.all.filter(x => !t.parentOf(x)).sort(byRank);
+  mutate(() => { delete i.parent; placeAt(i, tops, tops.indexOf(p) + 1); touch(i); });
+}
+function addChild(pid) {
+  const t = treeInfo();
+  let p = issueById(pid); if (!p) return;
+  if (t.parentOf(p)) p = t.parentOf(p);
+  let id;
+  mutate(() => { id = newIssue({}, p.id).id; });
+  collapsedParents.delete(p.id); saveCollapsed();
+  if (ui.view !== 'table') { openForm(id); return; }
+  renderView();
+  ui.sel = { iid: id, fid: 'title' }; applySel(); startEdit(id, 'title');
+}
+async function deleteIssue(iid) {
+  const i = issueById(iid); if (!i) return false;
+  const kids = treeInfo().kids.get(i.id) || [];
+  const msg = `#${i.no}「${i.values.title || ''}」を削除しますか？` + (kids.length ? `\n子の課題 ${kids.length}件も一緒に削除されます。` : '');
+  if (!(await confirmModal('課題を削除', msg, '削除する'))) return false;
+  mutate(() => { for (const x of [i, ...kids]) { x.deleted = true; touch(x); } });
+  return true;
+}
+function openRowMenu(anchor, iid) {
+  const i = issueById(iid); if (!i) return;
+  const t = treeInfo();
+  const isChild = !!t.parentOf(i), hasKids = (t.kids.get(i.id) || []).length > 0;
+  const item = (k, ic, label, kb, dis) => `<button class="mi" data-rk="${k}"${dis ? ' disabled style="opacity:.4"' : ''}><span class="ic">${ic}</span>${label}${kb ? `<span class="muted" style="margin-left:auto;padding-left:12px;font-size:11px">${kb}</span>` : ''}</button>`;
+  const p = openPopover(anchor, [
+    item('open', '✎', '詳細を開く', 'Enter'),
+    item('child', '＋', isChild ? '同じ親に子の課題を追加' : '子の課題を追加'),
+    '<hr>',
+    item('up', '↑', '上へ移動', 'Alt+Shift+↑'),
+    item('down', '↓', '下へ移動', 'Alt+Shift+↓'),
+    isChild ? item('out', '←', '親から外す', 'Alt+Shift+←') : item('in', '→', '1つ上の課題の子にする', 'Alt+Shift+→', hasKids),
+    '<hr>',
+    item('del', '×', '削除'),
+  ].join(''), { minWidth: 260 });
+  p.addEventListener('click', e => {
+    const b = e.target.closest('[data-rk]'); if (!b || b.disabled) return;
+    closePopover();
+    ({ open: () => openForm(iid), child: () => addChild(iid), up: () => moveRow(iid, -1), down: () => moveRow(iid, 1), in: () => indentRow(iid), out: () => outdentRow(iid), del: () => deleteIssue(iid) })[b.dataset.rk]();
+  });
+}
+// 行のドラッグで並べ替え（子の課題にする／親から外すこともできる）
+function startRowDrag(iid, e0) {
+  if (ui.sort.fid) { ensureManual(); renderAll(); }
+  const i = issueById(iid); if (!i) return;
+  const t = treeInfo();
+  const hasKids = (t.kids.get(iid) || []).length > 0;
+  const wrap = $('#tableWrap');
+  const line = document.createElement('div'); line.className = 'drop-line'; document.body.appendChild(line);
+  const trOf = id => main.querySelector(`tr[data-iid="${id}"]`);
+  const block = id => { const out = [id]; let n = ui.rowIds.indexOf(id) + 1; while (n < ui.rowIds.length && t.parentOf(issueById(ui.rowIds[n])) && t.parentOf(issueById(ui.rowIds[n])).id === id) out.push(ui.rowIds[n++]); return out; };
+  block(iid).forEach(id => { const tr = trOf(id); if (tr) tr.classList.add('dragging'); });
+  document.body.classList.add('row-dragging');
+  let target = null, moved = false;
+  const show = (y, indent) => { const w = wrap.getBoundingClientRect(); line.style.display = 'block'; line.style.top = (y - 1) + 'px'; line.style.left = (w.left + (indent ? 140 : 8)) + 'px'; line.style.width = Math.max(80, w.width - (indent ? 150 : 18)) + 'px'; };
+  const mv = ev => {
+    if (!moved && Math.abs(ev.clientY - e0.clientY) < 4) return;
+    moved = true;
+    const w = wrap.getBoundingClientRect();
+    if (ev.clientY < w.top + 48) wrap.scrollTop -= 14; else if (ev.clientY > w.bottom - 30) wrap.scrollTop += 14;
+    const el = document.elementFromPoint(Math.min(Math.max(ev.clientX, w.left + 4), w.right - 4), ev.clientY);
+    const tr = el && el.closest('tr[data-iid]');
+    target = null; line.style.display = 'none';
+    if (!tr || !wrap.contains(tr)) return;
+    const R = issueById(tr.dataset.iid); if (!R || R.id === i.id) return;
+    const rect = tr.getBoundingClientRect(), upper = ev.clientY < rect.top + rect.height / 2;
+    const Rp = t.parentOf(R);
+    if (Rp) {
+      if (Rp.id === i.id) return;
+      if (hasKids) { const b = block(Rp.id); target = { parent: null, ref: Rp, pos: 'after' }; show(trOf(b[b.length - 1]).getBoundingClientRect().bottom, false); }
+      else { target = { parent: Rp.id, ref: R, pos: upper ? 'before' : 'after' }; show(upper ? rect.top : rect.bottom, true); }
+      return;
+    }
+    const rk = t.kids.get(R.id) || [];
+    if (upper) { target = { parent: null, ref: R, pos: 'before' }; show(rect.top, false); }
+    else if (!hasKids && (rk.length && !collapsedParents.has(R.id) || ev.clientX > rect.left + 220)) { target = { parent: R.id, ref: null, pos: 'first' }; show(rect.bottom, true); }
+    else { const b = block(R.id); target = { parent: null, ref: R, pos: 'after' }; show(trOf(b[b.length - 1]).getBoundingClientRect().bottom, false); }
+  };
+  const end = ev => {
+    document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', end); document.removeEventListener('keydown', esc_, true);
+    line.remove(); document.body.classList.remove('row-dragging');
+    $$('tr.dragging', main).forEach(tr => tr.classList.remove('dragging'));
+    if (!ev || !target) return;
+    const res = target;
+    mutate(() => {
+      const before = i.parent || null;
+      if (res.parent) i.parent = res.parent; else delete i.parent;
+      const sibs = groupSibs(i, treeInfo());
+      const idx = res.pos === 'first' ? 0 : sibs.indexOf(res.ref) + (res.pos === 'after' ? 1 : 0);
+      placeAt(i, sibs, idx);
+      if ((i.parent || null) !== before) touch(i);
+    });
+    if (res.parent) { collapsedParents.delete(res.parent); saveCollapsed(); renderView(); }
+  };
+  const esc_ = ev => { if (ev.key === 'Escape') { ev.stopPropagation(); target = null; end(null); } };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', end); document.addEventListener('keydown', esc_, true);
+}
+
 /* ---------- コピー・貼り付け ---------- */
 function pasteGrid(text) {
   const rows = parseDelimited(text, text.includes('\t') ? '\t' : ',');
@@ -1384,7 +1772,9 @@ function pasteGrid(text) {
 function kanbanField() { const f = fieldById(doc.settings.kanbanField); return f && (f.type === 'select' || f.type === 'user') ? f : statusField(); }
 function renderKanban() {
   const f = kanbanField();
-  const list = filteredIssues();
+  const matched = filteredIssues();
+  const { rows, t } = treeRows(matched, { expandAll: true });
+  const list = rows.filter(r => !r.ctx).map(r => r.i);
   const cl = $('#countLbl'); if (cl) cl.textContent = `${list.length} / ${activeIssues().length}件`;
   if (!f) { main.innerHTML = '<div class="empty">カンバンにするには「選択肢」か「人」の項目が必要です。</div>'; return; }
   let cols;
@@ -1405,9 +1795,14 @@ function renderKanban() {
         const st = styleCss(rs.cells[cf.id]);
         if (cf.type === 'select') { const o = optById(cf, v); return o ? `<span style="${st}">${pill(o)}</span>` : ''; }
         if (cf.type === 'multiselect') return `<span style="${st}">${v.map(id => optById(cf, id)).filter(Boolean).map(pill).join(' ')}</span>`;
+        if (cf.type === 'link') return `<span style="${st}"><span class="lbl">${esc(cf.name)}</span>${cellHtml(i, cf)}</span>`;
+        if (cf.type === 'longtext') { const lines = String(v).split('\n'); const one = !!(prefs.ltCollapsed || {})[cf.id]; return `<span style="${st};flex-basis:100%"><span class="lbl">${esc(cf.name)}</span><span class="kc-lt">${esc(one ? lines[0] : v)}</span>${one && lines.length > 1 ? ` <span class="muted">他${lines.length - 1}行</span>` : ''}</span>`; }
         return `<span style="${st}"><span class="lbl">${esc(cf.name)}</span>${esc(fmt(cf, v))}</span>`;
       }).join('');
-      h += `<article class="kcard" draggable="true" data-iid="${i.id}" style="${styleCss(rs.row)}"><div class="kc-no">#${i.no}</div><div class="kc-title" style="${styleCss(rs.cells.title)}">${esc(i.values.title || '（件名なし）')}</div>${meta ? `<div class="kc-meta">${meta}</div>` : ''}</article>`;
+      const par = t.parentOf(i), ks = t.kids.get(i.id) || [];
+      const parLine = par ? `<div class="kc-parent" title="${esc(par.values.title || '')}">↳ #${par.no} ${esc(par.values.title || '')}</div>` : '';
+      const kidsLbl = ks.length ? `<span class="kc-kids" data-tip="子の課題">子 ${ks.filter(k => !isOpen(k)).length}/${ks.length} 完了</span>` : '';
+      h += `<article class="kcard" draggable="true" data-iid="${i.id}" style="${styleCss(rs.row)}">${parLine}<div class="kc-no">#${i.no}${kidsLbl}</div><div class="kc-title" style="${styleCss(rs.cells.title)}">${esc(i.values.title || '（件名なし）')}</div>${meta ? `<div class="kc-meta">${meta}</div>` : ''}</article>`;
     }
     h += `</div><button class="kadd" data-act="kadd" data-key="${esc(c.key)}">＋ 追加</button></section>`;
   }
@@ -1587,21 +1982,28 @@ function inputHtml(f, v, name) {
     case 'select': return `<select class="sel" ${n}><option value="">（空欄）</option>${(f.options || []).map(o => `<option value="${esc(o.id)}"${o.id === v ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}<option value="__new">＋ 新しい選択肢…</option></select>`;
     case 'multiselect': return `<div class="ms" data-name="${esc(name)}">${(f.options || []).map(o => `<label><input type="checkbox" value="${esc(o.id)}"${(v || []).includes(o.id) ? ' checked' : ''}>${pill(o)}</label>`).join('')}<button type="button" class="btn sm ghost" data-k="msadd" data-fid="${esc(f.id)}">＋ 追加</button></div>`;
     case 'user': return `<input class="inp" ${n} list="dl-users" value="${esc(v || '')}" style="max-width:240px" autocomplete="off">`;
+    case 'link': return `<div class="link-in" data-name="${esc(name)}"><input class="inp" data-part="url" placeholder="https://…（リンクの貼り付け・ドラッグもできます）" value="${esc((v && v.url) || '')}"><input class="inp" data-part="title" placeholder="表示する名前（空欄ならページのタイトルを自動で取得）" value="${esc((v && v.title) || '')}"></div>`;
     default: return `<input class="inp" ${n} value="${esc(v == null ? '' : v)}">`;
   }
 }
-function openForm(iid, preset = {}) {
+function openForm(iid, preset = {}, opts = {}) {
   const editing = iid ? issueById(iid) : null;
+  const t = treeInfo();
+  const myKids = editing ? (t.kids.get(editing.id) || []).slice().sort(byRank) : [];
+  const curParent = editing ? (t.parentOf(editing) || {}).id || '' : (opts.parent || '');
   const fields = activeFields().filter(f => !f.readonly);
   const vals = editing ? clone(editing.values) : Object.assign({}, preset);
   if (!editing && vals.status == null) { const st = statusField(); if (st && st.options[0]) vals.status = st.options[0].id; }
   const added = {};  // フォーム内で追加した選択肢 {fid: [label]}
   let body = `<datalist id="dl-users">${knownUsers().map(n => `<option value="${esc(n)}">`).join('')}</datalist><form class="frm" id="issueForm" onsubmit="return false">`;
   for (const f of fields) body += `<label class="${f.id === 'title' ? 'req' : ''}">${esc(f.name)}</label><div>${inputHtml(f, vals[f.id], 'f_' + f.id)}</div>`;
+  const parentOpts = t.all.filter(x => !t.parentOf(x) && (!editing || x.id !== editing.id)).sort(byRank);
+  body += `<label>親の課題</label><div>${myKids.length ? '<div class="ro-val">この課題は子の課題を持っているため、他の課題の子にはできません（2階層まで）。</div>' : `<select class="sel" name="__parent" style="max-width:100%"><option value="">（なし：最上位の課題）</option>${parentOpts.map(x => `<option value="${x.id}"${x.id === curParent ? ' selected' : ''}>#${x.no} ${esc((x.values.title || '').slice(0, 50))}</option>`).join('')}</select>`}</div>`;
+  if (editing && !curParent) body += `<label>子の課題</label><div><div class="kid-list">${myKids.map(k => { const o = optById(statusField() || {}, k.values.status); return `<button type="button" data-k="kid" data-iid="${k.id}"><span class="muted">#${k.no}</span>${o ? pill(o) : ''}<span>${esc(k.values.title || '（件名なし）')}</span></button>`; }).join('') || '<span class="muted">まだありません</span>'}</div><button type="button" class="btn sm" data-k="addkid">＋ 子の課題を追加</button></div>`;
   if (editing) body += `<label>記録</label><div class="ro-val">#${editing.no} ・ 作成 ${esc(fmtDateTime(editing.createdAt))} ${esc(editing.createdBy || '')} ・ 更新 ${esc(fmtDateTime(editing.updatedAt))} ${esc(editing.updatedBy || '')}</div>`;
   body += '</form>';
   const foot = `${editing ? '<div class="left"><button class="btn danger" data-k="del">削除</button></div>' : ''}<button class="btn" data-close>キャンセル</button>${editing ? '' : '<button class="btn" data-k="next" data-tip="保存して、続けて次の課題を入力">保存して次へ</button>'}<button class="btn primary" data-k="ok" data-tip="Ctrl+Enter">保存</button>`;
-  const m = openModal({ title: editing ? `#${editing.no} を編集` : '新しい課題', body, foot, wide: true });
+  const m = openModal({ title: editing ? `#${editing.no} を編集` : (curParent ? `新しい子の課題（#${(issueById(curParent) || {}).no} の下）` : '新しい課題'), body, foot, wide: true });
   const form = $('#issueForm', m);
   setTimeout(() => { const t = form.querySelector('[name=f_title]'); if (t) t.focus(); }, 0);
   form.addEventListener('change', e => {
@@ -1624,9 +2026,23 @@ function openForm(iid, preset = {}) {
       e.target.before(lb);
     }
   });
+  form.addEventListener('paste', e => {
+    if (e.target.dataset.part !== 'url') return;
+    const l = linkFromData(e.clipboardData); if (!l || !l.title) return;
+    e.preventDefault(); e.target.value = l.url;
+    const ti = e.target.parentNode.querySelector('[data-part=title]'); if (!ti.value) ti.value = l.title;
+  });
+  form.addEventListener('dragover', e => { if (e.target.closest('.link-in')) e.preventDefault(); });
+  form.addEventListener('drop', e => {
+    const box = e.target.closest('.link-in'); if (!box) return;
+    const l = linkFromData(e.dataTransfer); if (!l) return;
+    e.preventDefault(); box.querySelector('[data-part=url]').value = l.url;
+    if (l.title) box.querySelector('[data-part=title]').value = l.title;
+  });
   function collect() {
     const out = {};
     for (const f of fields) {
+      if (f.type === 'link') { const box = form.querySelector(`.link-in[data-name="f_${CSS.escape(f.id)}"]`); out[f.id] = { url: box.querySelector('[data-part=url]').value, title: box.querySelector('[data-part=title]').value }; continue; }
       if (f.type === 'multiselect') { out[f.id] = $$(`.ms[data-name="f_${CSS.escape(f.id)}"] input:checked`, form).map(x => x.value); continue; }
       const el = form.querySelector(`[name="f_${CSS.escape(f.id)}"]`);
       if (!el) continue;
@@ -1648,25 +2064,43 @@ function openForm(iid, preset = {}) {
         if (f.type === 'select') { patch[f.id] = v ? res(v) : null; continue; }
         if (f.type === 'multiselect') { patch[f.id] = v.map(res); continue; }
         if (f.type === 'checkbox') { patch[f.id] = v; continue; }
+        if (f.type === 'link') {
+          if (!v.url.trim()) { patch[f.id] = null; continue; }
+          const l = parseLinkText(v.url);
+          if (!l) { bad.push(f.name); continue; }
+          l.title = v.title.trim() || l.title || '';
+          patch[f.id] = l; continue;
+        }
         const c = convertInput(fld, v, false);
         if (c.ok) patch[f.id] = c.value; else bad.push(f.name);
       }
-      if (editing) { const iss = issueById(editing.id); if (iss) setValuesIn(iss, patch); }
-      else newNo = newIssue(patch).no;
+      const ps = form.querySelector('[name=__parent]');
+      const np = ps ? ps.value : curParent;
+      if (editing) {
+        const iss = issueById(editing.id);
+        if (iss) {
+          setValuesIn(iss, patch);
+          if ((iss.parent || '') !== np && ps) {
+            if (np) iss.parent = np; else delete iss.parent;
+            const sibs = groupSibs(iss); placeAt(iss, sibs, sibs.length); touch(iss);
+          }
+        }
+      } else newNo = newIssue(patch, np || undefined).no;
+      if (np) collapsedParents.delete(np);
     });
+    saveCollapsed();
     if (bad.length) toast(`読み取れなかった項目: ${bad.join('、')}`, true);
     closeModal(m);
-    if (next) openForm(null, preset);
+    if (next) openForm(null, preset, opts);
     if (newNo) toast(`#${newNo} を登録しました`);
   }
   m.addEventListener('click', async e => {
-    const k = e.target.dataset.k;
+    const k = (e.target.closest('[data-k]') || {}).dataset ? e.target.closest('[data-k]').dataset.k : undefined;
     if (k === 'ok') submit(false);
     if (k === 'next') submit(true);
-    if (k === 'del' && await confirmModal('課題を削除', `#${editing.no}「${editing.values.title || ''}」を削除しますか？`, '削除する')) {
-      mutate(() => { const iss = issueById(editing.id); if (iss) { iss.deleted = true; touch(iss); } });
-      closeModal(m);
-    }
+    if (k === 'del' && await deleteIssue(editing.id)) closeModal(m);
+    if (k === 'kid') openForm(e.target.closest('[data-iid]').dataset.iid);
+    if (k === 'addkid') openForm(null, {}, { parent: editing.id });
   });
   m.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(false); } });
 }
@@ -1763,7 +2197,7 @@ function openFieldEditor(fid, after) {
           if (!typeLocked) t.type = type;
           if (t.type === 'select' || t.type === 'multiselect') t.options = cleaned; else delete t.options;
         } else {
-          const nf = { id: 'f' + uid().slice(0, 8), name, type, order: 0, width: type === 'longtext' ? 240 : type === 'checkbox' ? 80 : 130 };
+          const nf = { id: 'f' + uid().slice(0, 8), name, type, order: 0, width: type === 'longtext' ? 260 : type === 'link' ? 200 : type === 'checkbox' ? 80 : 130 };
           if (type === 'select' || type === 'multiselect') nf.options = cleaned;
           insertField(nf);
         }
@@ -1901,6 +2335,7 @@ function openRuleEditor(rid, after) {
 function guessType(values) {
   const v = values.map(x => String(x).trim()).filter(Boolean);
   if (!v.length) return 'text';
+  if (v.every(x => /^(https?:\/\/|mailto:)\S+$/i.test(x))) return 'link';
   if (v.every(x => /^[-+]?[\d,，]+(\.\d+)?$/.test(toHalf(x)))) return 'number';
   if (v.every(x => /^\d{4}[\/\-.年]\d{1,2}[\/\-.月]\d{1,2}/.test(toHalf(x)))) return 'date';
   if (v.some(x => x.includes('\n'))) return 'longtext';
@@ -1989,8 +2424,10 @@ function openImport(initialText) {
 function exportCsv() {
   const fs = activeFields();
   const q = s => { s = String(s == null ? '' : s); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const lines = [fs.map(f => q(f.name)).join(',')];
-  for (const i of activeIssues().sort((a, b) => a.no - b.no)) lines.push(fs.map(f => q(f.type === 'no' ? i.no : f.type === 'checkbox' ? (getVal(i, f) ? '○' : '') : displayText(i, f))).join(','));
+  const t = treeInfo();
+  const cell = (i, f) => { const v = getVal(i, f); if (f.type === 'no') return i.no; if (f.type === 'checkbox') return v ? '○' : ''; if (f.type === 'link') return v && v.url ? (v.title ? `${v.title} (${v.url})` : v.url) : ''; return displayText(i, f); };
+  const lines = [['ID', '親ID'].concat(fs.filter(f => f.id !== 'no').map(f => f.name)).map(q).join(',')];
+  for (const r of treeRows(activeIssues(), { expandAll: true }).rows) { const i = r.i, p = t.parentOf(i); lines.push([i.no, p ? p.no : ''].concat(fs.filter(f => f.id !== 'no').map(f => cell(i, f))).map(q).join(',')); }
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -2048,6 +2485,14 @@ function openHelp() {
     <li><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> でセルを移動、<kbd>Delete</kbd> で消去、<kbd>Ctrl+C</kbd> / <kbd>Ctrl+V</kbd> でコピー・貼り付け。Excelから複数行を貼り付けると、足りない行は新しい課題になります。</li>
     <li><kbd>Ctrl+Z</kbd> で元に戻す、<kbd>Ctrl+Y</kbd> でやり直し、<kbd>Ctrl+S</kbd> で保存。</li>
     <li>列の見出しをクリックで並べ替え、▾ から絞り込みや列の設定。見出しの右端をドラッグすると列幅を変えられます。</li></ul>
+    <h3>並べ替えと親子</h3>
+    <ul><li>行の左端の <b>⋮⋮</b> をドラッグすると、行の順番を入れ替えられます。行の下半分の右寄りに落とすと、その課題の「子」になります。</li>
+    <li>行の <b>⋯</b> から「子の課題を追加」「上へ・下へ移動」「1つ上の課題の子にする」「親から外す」ができます。キーボードでは <kbd>Alt+Shift+↑↓</kbd> で移動、<kbd>Alt+Shift+→</kbd> で子にする、<kbd>Alt+Shift+←</kbd> で親から外す。</li>
+    <li>親子は2階層までです。親の行の ▼ で子の課題を隠せます。件名の右の「1/3」は、子の課題の完了数です。</li>
+    <li>見出しをクリックして並べ替えているときは、ツールバーの「並べ替え」の × で手動の並び順に戻ります。</li></ul>
+    <h3>リンクと複数行テキスト</h3>
+    <ul><li>「リンク」の項目にURLを入れると、ページのタイトルを自動で取得して表示します。サイトによっては取得できないので、そのときは名前を入力してください。ブラウザのアドレスバーやページ上のリンクをセルにドラッグすると、タイトルも一緒に入ります。</li>
+    <li>複数行テキストは、すべての行を表示します。セルの ▼ で1行だけの表示に、見出しの ⊟ で列全体を切り替えられます。</li></ul>
     <h3>項目と色分け</h3>
     <ul><li>「項目の管理」や見出しの ＋ から、自由に項目を追加できます。選択肢の項目は、入力時に新しい値を打てばその場で選択肢が増えます。</li>
     <li>「色分けルール」で、条件に合う行やセルに色を付けられます（例: 期限切れで未完了なら赤）。上にあるルールが優先されます。</li></ul>
@@ -2144,7 +2589,12 @@ function addSample() {
     ['CSV取り込み時の文字化け', sid(1), '高橋', addDays(t, -1), pid(0)],
     ['権限ごとのメニュー表示の確認', sid(0), '', '', pid(1)],
   ];
-  mutate(() => { for (const r of rows) newIssue({ title: r[0], status: r[1], assignee: r[2], due: r[3], priority: r[4] }); });
+  mutate(() => {
+    const made = rows.map(r => newIssue({ title: r[0], status: r[1], assignee: r[2], due: r[3], priority: r[4] }));
+    newIssue({ title: '改ページ位置がずれる原因を調査', status: sid(1), assignee: '鈴木', due: addDays(t, 1) }, made[1].id);
+    newIssue({ title: 'フォントの埋め込み設定を確認', status: sid(3), assignee: '鈴木' }, made[1].id);
+    newIssue({ title: '修正版で帳票を出力して確認', status: sid(0), assignee: '高橋', due: addDays(t, 2) }, made[1].id);
+  });
 }
 
 /* ============================================================
@@ -2179,9 +2629,14 @@ document.addEventListener('click', async e => {
     case 'clearFilter': delete ui.filters[a.dataset.fid]; renderAll(); break;
     case 'clearAll': ui.filters = {}; ui.quick = 'all'; ui.search = ''; renderAll(); break;
     case 'colmenu': openColMenu(a, a.dataset.fid); break;
-    case 'sort': { const fid = a.dataset.fid; ui.sort = ui.sort.fid === fid ? { fid, dir: -ui.sort.dir } : { fid, dir: 1 }; renderView(); break; }
+    case 'sort': { const fid = a.dataset.fid; ui.sort = ui.sort.fid !== fid ? { fid, dir: 1 } : ui.sort.dir > 0 ? { fid, dir: -1 } : { fid: null, dir: 1 }; renderAll(); break; }
     case 'addfield': openFieldEditor(null); break;
     case 'addrow': { let id; mutate(() => { id = newIssue({}).id; }); ui.sel = { iid: id, fid: 'title' }; applySel(); startEdit(id, 'title'); break; }
+    case 'rowmenu': openRowMenu(a, a.dataset.iid); break;
+    case 'tg': { const id = a.dataset.iid; if (collapsedParents.has(id)) collapsedParents.delete(id); else collapsedParents.add(id); saveCollapsed(); renderView(); break; }
+    case 'lttg': { const k = a.dataset.iid + ':' + a.dataset.fid; ui.ltOpen.set(k, !ltCollapsed(a.dataset.iid, a.dataset.fid)); renderView(); break; }
+    case 'ltcol': { const fid = a.dataset.fid; prefs.ltCollapsed = Object.assign({}, prefs.ltCollapsed); prefs.ltCollapsed[fid] = !prefs.ltCollapsed[fid]; for (const k of [...ui.ltOpen.keys()]) if (k.endsWith(':' + fid)) ui.ltOpen.delete(k); LS.set('kk-prefs', prefs); renderView(); break; }
+    case 'clearSort': ui.sort = { fid: null, dir: 1 }; renderAll(); break;
     case 'toggle': { const td = a.closest('td'); if (td) { ui.sel = { iid: td.dataset.iid, fid: td.dataset.fid }; startEdit(td.dataset.iid, td.dataset.fid); } break; }
     case 'kadd': { const f = kanbanField(); openForm(null, a.dataset.key ? { [f.id]: a.dataset.key } : {}); break; }
   }
@@ -2204,9 +2659,17 @@ main.addEventListener('dblclick', e => {
   if (!ui.editing) startEdit(td.dataset.iid, td.dataset.fid);
 });
 main.addEventListener('click', e => {
+  if (e.target.closest('a[href]')) return;
   const card = e.target.closest('.kcard');
   if (card) openForm(card.dataset.iid);
 });
+// 行のドラッグ（⋮⋮ をつかむ）
+main.addEventListener('mousedown', e => {
+  const g = e.target.closest('[data-grip]'); if (!g || e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  if (ui.editing && !ui.editing.choice) endEdit(true);
+  startRowDrag(g.dataset.grip, e);
+}, true);
 // 列幅の変更
 main.addEventListener('mousedown', e => {
   const rz = e.target.closest('.resizer'); if (!rz) return;
@@ -2227,14 +2690,54 @@ main.addEventListener('mousedown', e => {
 }, true);
 // カンバンのドラッグ
 main.addEventListener('dragstart', e => { const c = e.target.closest('.kcard'); if (!c) return; e.dataTransfer.setData('text/x-issue', c.dataset.iid); e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); });
-main.addEventListener('dragend', e => { const c = e.target.closest('.kcard'); if (c) c.classList.remove('dragging'); $$('.kcards.over').forEach(x => x.classList.remove('over')); });
-main.addEventListener('dragover', e => { const z = e.target.closest('.kcards'); if (!z) return; e.preventDefault(); $$('.kcards.over').forEach(x => x !== z && x.classList.remove('over')); z.classList.add('over'); });
+const clearKDrop = () => { $$('.kcards.over,.kcards.drop-end').forEach(x => x.classList.remove('over', 'drop-end')); $$('.kcard.drop-before').forEach(x => x.classList.remove('drop-before')); };
+function kanbanBefore(z, y) {
+  for (const c of $$('.kcard', z)) { if (c.classList.contains('dragging')) continue; const r = c.getBoundingClientRect(); if (y < r.top + r.height / 2) return c; }
+  return null;
+}
+main.addEventListener('dragend', e => { const c = e.target.closest('.kcard'); if (c) c.classList.remove('dragging'); clearKDrop(); });
+main.addEventListener('dragover', e => {
+  const isCard = e.dataTransfer.types.includes('text/x-issue');
+  const z = e.target.closest('.kcards');
+  if (z && isCard) {
+    e.preventDefault(); clearKDrop(); z.classList.add('over');
+    if (!ui.sort.fid) { const b = kanbanBefore(z, e.clientY); if (b) b.classList.add('drop-before'); else z.classList.add('drop-end'); }
+    return;
+  }
+  // ブラウザからリンクをドラッグして、リンクのセルに落とす
+  const td = !isCard && e.target.closest('td.t-link');
+  if (td) e.preventDefault();
+});
 main.addEventListener('drop', e => {
+  const td = e.target.closest('td.t-link');
+  if (td && !e.dataTransfer.types.includes('text/x-issue')) {
+    const l = linkFromData(e.dataTransfer); if (!l) return;
+    e.preventDefault();
+    ui.sel = { iid: td.dataset.iid, fid: td.dataset.fid };
+    setValues(td.dataset.iid, { [td.dataset.fid]: l });
+    return;
+  }
   const z = e.target.closest('.kcards'); if (!z) return;
-  e.preventDefault(); z.classList.remove('over');
-  const iid = e.dataTransfer.getData('text/x-issue'); if (!iid) return;
+  e.preventDefault();
+  const iid = e.dataTransfer.getData('text/x-issue'); if (!iid) { clearKDrop(); return; }
+  const before = ui.sort.fid ? null : kanbanBefore(z, e.clientY);
+  const cards = $$('.kcard', z).filter(c => c.dataset.iid !== iid);
+  clearKDrop();
   const f = kanbanField();
-  setValues(iid, { [f.id]: z.dataset.key || null });
+  mutate(() => {
+    const i = issueById(iid); if (!i) return;
+    setValuesIn(i, { [f.id]: z.dataset.key || null });
+    if (ui.sort.fid) return;
+    // 順番は同じ親の課題（最上位どうし・兄弟どうし）の中で入れ替える。
+    // 落とした位置の前にある一番近い同じグループのカードの後ろへ。なければ後ろにある最初のカードの前へ
+    const idx = before ? cards.indexOf(before) : cards.length;
+    const sibs = groupSibs(i);
+    const inGroup = c => { const x = issueById(c.dataset.iid); return sibs.includes(x) ? x : null; };
+    const prev = cards.slice(0, idx).map(inGroup).filter(Boolean).pop();
+    const next = cards.slice(idx).map(inGroup).find(Boolean);
+    if (prev) placeAt(i, sibs, sibs.indexOf(prev) + 1);
+    else if (next) placeAt(i, sibs, sibs.indexOf(next));
+  });
 });
 document.addEventListener('input', e => { if (e.target.id === 'searchBox') { ui.search = e.target.value; renderView(); } });
 document.addEventListener('change', e => {
@@ -2257,6 +2760,13 @@ document.addEventListener('keydown', e => {
   if (ui.view !== 'table') return;
   if (!ui.sel) { if (e.key.startsWith('Arrow') && ui.rowIds.length) { e.preventDefault(); ui.sel = { iid: ui.rowIds[0], fid: ui.colIds[Math.min(1, ui.colIds.length - 1)] }; applySel(); } return; }
   const k = e.key;
+  if (e.altKey && e.shiftKey && k.startsWith('Arrow')) {
+    e.preventDefault();
+    const id = ui.sel.iid;
+    if (k === 'ArrowUp') moveRow(id, -1); else if (k === 'ArrowDown') moveRow(id, 1); else if (k === 'ArrowRight') indentRow(id); else outdentRow(id);
+    ui.sel = { iid: id, fid: ui.sel.fid }; applySel();
+    return;
+  }
   if (k === 'ArrowDown') { e.preventDefault(); moveSel(1, 0); }
   else if (k === 'ArrowUp') { e.preventDefault(); moveSel(-1, 0); }
   else if (k === 'ArrowLeft') { e.preventDefault(); moveSel(0, -1); }
@@ -2283,11 +2793,23 @@ document.addEventListener('copy', e => {
   const i = issueById(ui.sel.iid), f = fieldById(ui.sel.fid);
   if (!i || !f) return;
   e.preventDefault();
+  const v = getVal(i, f);
+  if (f.type === 'link' && v && v.url) {
+    e.clipboardData.setData('text/plain', v.url);
+    if (safeHref(v.url)) e.clipboardData.setData('text/html', `<a href="${esc(v.url)}">${esc(fmt(f, v))}</a>`);
+    return;
+  }
   e.clipboardData.setData('text/plain', f.type === 'no' ? String(i.no) : displayText(i, f));
 });
 document.addEventListener('paste', e => {
   if (ui.view !== 'table' || ui.editing || openModals.length || (inTextInput(document.activeElement) && document.activeElement !== catcher)) return;
   const text = e.clipboardData.getData('text/plain');
+  const sf = ui.sel && fieldById(ui.sel.fid);
+  if (sf && sf.type === 'link' && !String(text).trim().includes('\n')) {
+    // リンクを含む文章（Webページからのコピーなど）なら、タイトルも一緒に入れる
+    const l = linkFromData(e.clipboardData);
+    if (l) { e.preventDefault(); setValues(ui.sel.iid, { [sf.id]: l }); return; }
+  }
   if (!text) return;
   e.preventDefault();
   pasteGrid(text.replace(/\r?\n$/, ''));
