@@ -1,0 +1,2318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>課題管理表</title>
+<style>
+*{box-sizing:border-box}
+:root{
+  --bg:#f4f4f2;--surface:#fff;--surface-2:#f9f9f7;--hover:#f0efeb;
+  --border:#e3e2dd;--border-strong:#cfcdc6;
+  --text:#1d1d1b;--text-2:#52514e;--muted:#8a8984;
+  --accent:#2a78d6;--accent-ink:#1c5cab;--accent-weak:#e6f0fc;
+  --danger:#c4352f;--danger-weak:#fdecea;
+  --warn-bg:#fff6dc;--warn-border:#efd27c;
+  --ok:#1e7b1e;
+  --radius:8px;
+  --font:system-ui,-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:13px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+#app{display:flex;flex-direction:column;height:100vh;min-width:0}
+
+/* ---------- top ---------- */
+.top{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 16px 0}
+.top-row{display:flex;align-items:center;gap:10px;min-height:36px;flex-wrap:wrap}
+.title-input{font-size:17px;font-weight:700;border:1px solid transparent;border-radius:6px;padding:2px 6px;background:transparent;min-width:120px;max-width:420px}
+.title-input:hover{border-color:var(--border)}
+.title-input:focus{outline:none;border-color:var(--accent);background:#fff}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--text-2);background:var(--surface-2);white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.chip.ok .dot{background:#0ca30c}
+.chip.warn .dot{background:#eda100}
+.chip.off .dot{background:var(--danger)}
+.spacer{flex:1}
+.btn{border:1px solid var(--border-strong);background:var(--surface);border-radius:6px;padding:4px 12px;line-height:20px;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-ink)}
+.btn.danger{color:var(--danger);border-color:#e7b4b0}
+.btn.danger:hover{background:var(--danger-weak)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--hover)}
+.btn.sm{padding:2px 8px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+.tabs{display:flex;gap:2px;margin-top:6px;align-items:flex-end}
+.tab{border:none;background:none;padding:8px 14px;border-bottom:2px solid transparent;color:var(--text-2);font-weight:600}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--accent-ink);border-bottom-color:var(--accent)}
+.tabs .spacer{align-self:stretch}
+.tabs .btn{margin-bottom:6px}
+
+/* ---------- banner ---------- */
+.banner{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--warn-bg);border-bottom:1px solid var(--warn-border);font-size:13px;flex-wrap:wrap}
+.banner.info{background:var(--accent-weak);border-bottom-color:#bcd5f5}
+.banner.err{background:var(--danger-weak);border-bottom-color:#f0c0bb}
+.banner b{font-weight:700}
+
+/* ---------- toolbar ---------- */
+.toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;flex-wrap:wrap;background:var(--bg)}
+.search{border:1px solid var(--border-strong);border-radius:6px;padding:4px 10px;width:220px;background:#fff}
+.search:focus,.inp:focus,.sel:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.qchips{display:flex;gap:4px;flex-wrap:wrap}
+.qchip{border:1px solid var(--border-strong);background:#fff;border-radius:999px;padding:2px 10px;font-size:12px}
+.qchip:hover{background:var(--hover)}
+.qchip.on{background:var(--text);border-color:var(--text);color:#fff}
+.fchip{display:inline-flex;align-items:center;gap:4px;background:var(--accent-weak);color:var(--accent-ink);border-radius:999px;padding:2px 4px 2px 10px;font-size:12px}
+.fchip button{border:none;background:none;color:inherit;padding:0 4px;border-radius:50%}
+.fchip button:hover{background:#cfe0f7}
+.count{color:var(--muted);font-size:12px}
+.count select{color:var(--text)}
+
+/* ---------- main ---------- */
+main{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+.table-wrap{flex:1;overflow:auto;background:var(--surface);border-top:1px solid var(--border)}
+.grid{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;min-width:100%}
+.grid th,.grid td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 8px;height:32px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;vertical-align:middle}
+.grid thead th{position:sticky;top:0;background:var(--surface-2);z-index:3;font-weight:600;color:var(--text-2);padding:0 0 0 8px;user-select:none}
+.grid thead th.filtered{color:var(--accent-ink)}
+.th-in{display:flex;align-items:center;gap:2px;height:32px}
+.th-name{flex:1;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.th-ind{font-size:10px;color:var(--accent)}
+.th-btn{border:none;background:none;color:var(--muted);width:22px;height:22px;border-radius:4px;flex:none;padding:0}
+.th-btn:hover{background:var(--hover);color:var(--text)}
+.resizer{position:absolute;right:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:4}
+.resizer:hover,.resizer.drag{background:var(--accent);opacity:.4}
+.grid th{position:sticky}
+.grid td{background:var(--surface);cursor:default}
+.grid .c-no{position:sticky;left:0;z-index:2}
+.grid thead .c-no{z-index:4}
+.grid td.c-no{box-shadow:inset -1px 0 0 var(--border)}
+.grid tbody tr:hover td{background-image:linear-gradient(rgba(0,0,0,.03),rgba(0,0,0,.03))}
+.grid td.sel{outline:2px solid var(--accent);outline-offset:-2px}
+.grid td.ro{color:var(--text-2)}
+.grid td.t-number{text-align:right;font-variant-numeric:tabular-nums}
+.grid td.t-checkbox{text-align:center}
+.grid .c-add{width:44px;border-right:none}
+.th-add{border:none;background:none;font-size:16px;color:var(--muted);width:32px;height:28px;border-radius:4px}
+.th-add:hover{background:var(--hover);color:var(--accent)}
+.add-row td{border-bottom:none;padding:0}
+.add-row button{border:none;background:none;color:var(--muted);padding:6px 12px;width:100%;text-align:left}
+.add-row button:hover{color:var(--accent);background:var(--surface-2)}
+.no-link{border:none;background:none;padding:0;color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.no-link:hover{text-decoration:underline}
+.cb{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid var(--border-strong);border-radius:4px;font-size:11px;line-height:1;cursor:pointer;background:#fff;vertical-align:middle;color:#fff}
+.cb.on{background:var(--accent);border-color:var(--accent)}
+.pill{display:inline-block;padding:0 8px;border-radius:999px;font-size:12px;line-height:20px;background:color-mix(in srgb,var(--c) 16%,white);color:color-mix(in srgb,var(--c) 72%,black);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.empty{padding:48px 16px;text-align:center;color:var(--text-2)}
+.empty p{margin:0 0 12px}
+
+.cell-editor{position:fixed;z-index:50;border:2px solid var(--accent);border-radius:2px;padding:4px 7px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.15);outline:none;font-size:13px}
+textarea.cell-editor{resize:both;line-height:1.5}
+
+/* ---------- kanban ---------- */
+.kanban{flex:1;overflow:auto;display:flex;gap:12px;padding:4px 16px 16px;align-items:flex-start}
+.kcol{flex:0 0 272px;background:#ebebe7;border-radius:10px;display:flex;flex-direction:column;max-height:100%}
+.kcol header{display:flex;align-items:center;gap:8px;padding:10px 12px 6px;font-weight:700}
+.kdot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+.kcount{color:var(--muted);font-weight:400;font-size:12px}
+.kcards{flex:1;overflow:auto;padding:4px 8px;min-height:40px;display:flex;flex-direction:column;gap:8px;border-radius:8px}
+.kcards.over{background:rgba(42,120,214,.12)}
+.kcard{background:#fff;border-radius:8px;padding:8px 10px;box-shadow:0 1px 2px rgba(0,0,0,.08);border:1px solid var(--border);cursor:grab}
+.kcard:hover{border-color:var(--border-strong)}
+.kcard.dragging{opacity:.4}
+.kc-no{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.kc-title{font-weight:600;margin:2px 0 6px;word-break:break-word}
+.kc-meta{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:12px;color:inherit;align-items:center}
+.kc-meta .lbl{color:var(--muted);margin-right:2px}
+.kadd{border:none;background:none;color:var(--text-2);text-align:left;padding:8px 12px 10px;border-radius:0 0 10px 10px}
+.kadd:hover{color:var(--accent-ink);background:rgba(0,0,0,.04)}
+
+/* ---------- dashboard ---------- */
+.dash{flex:1;overflow:auto;padding:4px 16px 24px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:left}
+.tile:hover{border-color:var(--border-strong);background:var(--surface-2)}
+.tile .t-label{color:var(--text-2);font-size:12px;display:flex;align-items:center;gap:6px}
+.tile .t-num{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
+.tile .t-sub{color:var(--muted);font-size:12px}
+.tile.critical .t-label{color:#b42318}
+.tile.warning .t-label{color:#8a5a00}
+.sicon{display:inline-flex;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex:none}
+.sicon.critical{background:#d03b3b}
+.sicon.warning{background:#fab219;color:#3d2a00}
+.cards2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;min-width:0}
+.card h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 select{font-weight:400;font-size:12px}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar-row{display:grid;grid-template-columns:minmax(64px,120px) 1fr 44px;align-items:center;gap:8px}
+.bar-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
+.bar-track{height:14px;display:flex;gap:2px}
+.bar-seg{height:100%;border-radius:0;min-width:2px}
+.bar-seg:last-child{border-radius:0 4px 4px 0}
+.bar-val{text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--text-2);margin-bottom:8px}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend i{width:10px;height:10px;border-radius:2px;background:var(--c);display:inline-block}
+.list{display:flex;flex-direction:column}
+.list-row{display:grid;grid-template-columns:86px 48px 1fr auto;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--border);border-radius:4px;cursor:pointer;text-align:left;background:none;border-left:none;border-right:none;border-top:none;width:100%}
+.list-row:hover{background:var(--surface-2)}
+.list-row .muted{color:var(--muted);font-size:12px}
+.list-row .ttl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.due-over{color:#b42318;font-weight:600}
+.due-soon{color:#8a5a00;font-weight:600}
+.muted{color:var(--muted)}
+
+/* ---------- popover / modal ---------- */
+.pop{position:fixed;z-index:90;background:#fff;border:1px solid var(--border-strong);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.16);min-width:200px;max-width:340px;padding:6px;font-size:13px}
+.pop .mi{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;text-align:left;padding:6px 10px;border-radius:5px;white-space:nowrap}
+.pop .mi:hover,.pop .mi.act{background:var(--hover)}
+.pop .mi.danger{color:var(--danger)}
+.pop .mi .ic{width:16px;text-align:center;color:var(--muted)}
+.pop hr{border:none;border-top:1px solid var(--border);margin:6px 0}
+.pop .sec{padding:4px 10px;font-size:11px;color:var(--muted);font-weight:600}
+.pop-search{width:100%;border:1px solid var(--border-strong);border-radius:5px;padding:4px 8px;margin-bottom:4px}
+.pop-search:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.pop-list{max-height:260px;overflow:auto}
+.pop-list label{display:flex;align-items:center;gap:8px;padding:3px 8px;border-radius:4px;cursor:pointer}
+.pop-list label:hover{background:var(--hover)}
+.pop-foot{display:flex;gap:6px;justify-content:flex-end;padding-top:6px;border-top:1px solid var(--border);margin-top:4px}
+.choice{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer}
+.choice.act{background:var(--accent-weak)}
+.choice .ck{width:16px;color:var(--accent);font-weight:700}
+.choice.add{color:var(--accent-ink)}
+.choice.clear{color:var(--muted)}
+
+.overlay{position:fixed;inset:0;background:rgba(20,20,18,.32);z-index:80;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto}
+.modal{background:#fff;border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.24);width:100%;max-width:560px;display:flex;flex-direction:column;max-height:88vh}
+.modal.wide{max-width:780px}
+.modal-h{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-h h2{margin:0;font-size:16px;flex:1}
+.modal-x{border:none;background:none;font-size:20px;line-height:1;color:var(--muted);width:30px;height:30px;border-radius:6px}
+.modal-x:hover{background:var(--hover)}
+.modal-b{padding:16px 18px;overflow:auto}
+.modal-f{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--border);flex-wrap:wrap}
+.modal-f .left{margin-right:auto;display:flex;gap:8px}
+.frm{display:grid;grid-template-columns:120px 1fr;gap:10px 14px;align-items:start}
+.frm>label{padding-top:5px;color:var(--text-2);font-weight:600;font-size:12px}
+.frm .req::after{content:" *";color:var(--danger)}
+.inp,.sel{border:1px solid var(--border-strong);border-radius:6px;padding:5px 8px;background:#fff;width:100%}
+textarea.inp{min-height:84px;resize:vertical;line-height:1.5}
+.sel{width:auto;max-width:100%}
+.hint{color:var(--muted);font-size:12px;margin-top:4px}
+.ms{display:flex;flex-wrap:wrap;gap:6px;padding-top:3px}
+.ms label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.ro-val{padding-top:5px;color:var(--text-2)}
+.flist{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:8px}
+.frow{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border)}
+.frow:last-child{border-bottom:none}
+.frow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .tp{color:var(--muted);font-size:12px;width:96px}
+.tag{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:0 5px;margin-left:6px}
+.iconbtn{border:1px solid transparent;background:none;border-radius:5px;width:26px;height:26px;color:var(--text-2);padding:0;flex:none}
+.iconbtn:hover{background:var(--hover);border-color:var(--border)}
+.iconbtn:disabled{opacity:.3;cursor:default;background:none;border-color:transparent}
+.opt-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.opt-row .inp{flex:1}
+.swatch{width:22px;height:22px;border-radius:5px;border:1px solid rgba(0,0,0,.12);background:var(--c);flex:none;padding:0;position:relative}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.swatches .swatch.on{outline:2px solid var(--text);outline-offset:1px}
+.swatch.none{background:repeating-linear-gradient(135deg,#fff 0 4px,#e6e5e0 4px 6px)}
+.cond-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.cond-row .inp{width:140px}
+.preview{display:inline-block;padding:4px 12px;border:1px solid var(--border);border-radius:4px;min-width:150px}
+.rule-row .pv{width:110px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;flex:none}
+.rule-row .sum{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conf-row{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.conf-row .ttl{font-weight:600;margin-bottom:6px}
+.conf-row label{display:flex;gap:8px;align-items:baseline;padding:3px 0;cursor:pointer}
+.conf-row .who{color:var(--muted);font-size:12px;width:110px;flex:none}
+.map-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.map-tbl th,.map-tbl td{border-bottom:1px solid var(--border);padding:5px 6px;text-align:left;vertical-align:top}
+.map-tbl td.smp{color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.help h3{font-size:14px;margin:16px 0 6px}
+.help h3:first-child{margin-top:0}
+.help p,.help li{color:var(--text-2)}
+.help ul{padding-left:20px;margin:4px 0}
+kbd{font:11px/1 var(--font);border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:4px;padding:2px 5px;background:var(--surface-2)}
+
+#toasts{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.toast{background:#2b2b29;color:#fff;padding:8px 14px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.2);font-size:13px;max-width:560px}
+.toast.err{background:#9d2a24}
+#keyCatcher{position:fixed;left:-200px;top:0;width:2px;height:2px;opacity:0;resize:none;border:none;padding:0;overflow:hidden;z-index:-1}
+#keyCatcher.cell-editor{opacity:1;z-index:50;overflow:auto}
+#tip{position:fixed;z-index:120;background:#2b2b29;color:#fff;font-size:12px;padding:4px 8px;border-radius:5px;pointer-events:none;display:none;max-width:280px}
+
+@media (max-width:640px){
+  .top,.toolbar{padding-left:16px;padding-right:16px}
+  .search{width:100%}
+  .frm{grid-template-columns:1fr}
+  .frm>label{padding-top:0}
+  .cards2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<script id="issue-data" type="application/json">null</script>
+<div id="app">
+  <header class="top">
+    <div class="top-row">
+      <input class="title-input" id="titleInput" aria-label="管理表の名前">
+      <span class="chip" id="fileChip"><span class="dot"></span><span></span></span>
+      <span class="chip" id="saveChip"><span class="dot"></span><span></span></span>
+      <span class="spacer"></span>
+      <button class="btn" id="saveBtn" data-act="save" data-tip="保存（Ctrl+S）">保存</button>
+      <button class="btn" data-act="menu">メニュー ▾</button>
+    </div>
+    <nav class="tabs">
+      <button class="tab" data-view="table">一覧</button>
+      <button class="tab" data-view="kanban">カンバン</button>
+      <button class="tab" data-view="dash">ダッシュボード</button>
+      <span class="spacer"></span>
+      <button class="btn primary" data-act="new">＋ 新しい課題</button>
+    </nav>
+  </header>
+  <div id="banners"></div>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+</div>
+<div id="toasts"></div>
+<div id="tip"></div>
+<textarea id="keyCatcher" aria-label="セルの入力" tabindex="-1"></textarea>
+<noscript>この課題管理表は JavaScript を有効にした Chrome または Edge で開いてください。</noscript>
+<script>
+(function () {
+'use strict';
+
+/* ============================================================
+   保存の仕組み
+   - 課題データはこのHTMLの <script id="issue-data"> に JSON で埋め込まれている
+   - 保存時は File System Access API でこのファイル自身を上書きする
+   - 開いている間は定期的にファイルを確認し、他の人の保存を検知したら取り込む
+   - 取り込み・保存時は「前回読んだ内容」を基準に、課題・項目ごとに3方向マージする
+   ============================================================ */
+
+const DATA_OPEN = '<script id="issue-data" type="application/json">';
+const DATA_CLOSE = '</' + 'script>';
+const TEMPLATE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+const FS = typeof window.showOpenFilePicker === 'function';
+const POLL_MS = 4000;
+const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948', '#8a8984'];
+const RULE_BG = ['#fde2e1', '#fde8d9', '#fff4c9', '#dff3df', '#deebfb', '#ebe7fb', '#eeeeec'];
+const RULE_FG = ['#b42318', '#9a4a00', '#1e6b1e', '#1c5cab', '#5b3fc4', '#8a8984', '#1d1d1b'];
+const TYPES = {
+  text: '1行テキスト', longtext: '複数行テキスト', number: '数値', date: '日付',
+  select: '選択肢（1つ）', multiselect: '選択肢（複数）', user: '人', checkbox: 'チェックボックス',
+};
+const SYS_PROP = { no: 'no', createdAt: 'createdAt', createdBy: 'createdBy', updatedAt: 'updatedAt', updatedBy: 'updatedBy' };
+
+/* ---------- utils ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const J = v => (v === undefined ? undefined : JSON.stringify(v));
+const clone = o => JSON.parse(JSON.stringify(o));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/-/g, '').slice(0, 16);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const today = () => ymd(new Date());
+function addDays(s, n) { const [y, m, d] = s.split('-').map(Number); return ymd(new Date(y, m - 1, d + n)); }
+function fmtTime(ms) { if (!ms) return ''; const d = new Date(ms); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function fmtDateTime(ms) { if (!ms) return ''; const d = new Date(ms); return ymd(d).replace(/-/g, '/') + ' ' + fmtTime(ms); }
+function relTime(ms) {
+  if (!ms) return '';
+  const s = (Date.now() - ms) / 1000;
+  if (s < 60) return 'たった今';
+  if (s < 3600) return Math.floor(s / 60) + '分前';
+  if (s < 86400) return Math.floor(s / 3600) + '時間前';
+  if (s < 86400 * 7) return Math.floor(s / 86400) + '日前';
+  return fmtDateTime(ms).slice(0, 10);
+}
+const isEmpty = v => v == null || v === '' || v === false || (Array.isArray(v) && v.length === 0);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 保存できない環境では無視 */ } },
+};
+function toHalf(s) { return String(s).replace(/[０-９．－／：，]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); }
+
+/* ---------- data model ---------- */
+function defaultDoc() {
+  // 既定の内容は固定値にしておく（空のファイルを別々に開いた人どうしでもマージできるように）
+  return {
+    meta: { format: 'kadai-kanri', version: 1, fileId: null, saveId: null, savedAt: null, savedBy: null },
+    settings: { id: 'settings', title: '課題管理表', kanbanField: 'status', dueField: 'due', assigneeField: 'assignee', groupField: 'assignee', cardFields: ['assignee', 'due', 'priority'] },
+    fields: [
+      { id: 'no', name: 'ID', type: 'no', system: true, readonly: true, order: 0, width: 64 },
+      { id: 'title', name: '件名', type: 'text', system: true, order: 1, width: 300 },
+      { id: 'status', name: 'ステータス', type: 'select', system: true, order: 2, width: 110, options: [
+        { id: 's1', label: '未着手', color: '#8a8984' },
+        { id: 's2', label: '対応中', color: '#2a78d6' },
+        { id: 's3', label: '確認待ち', color: '#eda100' },
+        { id: 's4', label: '完了', color: '#008300', done: true },
+      ] },
+      { id: 'assignee', name: '担当者', type: 'user', order: 3, width: 110 },
+      { id: 'due', name: '期限', type: 'date', order: 4, width: 110 },
+      { id: 'priority', name: '優先度', type: 'select', order: 5, width: 90, options: [
+        { id: 'p1', label: '高', color: '#e34948' },
+        { id: 'p2', label: '中', color: '#eda100' },
+        { id: 'p3', label: '低', color: '#8a8984' },
+      ] },
+      { id: 'createdAt', name: '作成日時', type: 'datetime', system: true, readonly: true, hidden: true, order: 90, width: 130 },
+      { id: 'createdBy', name: '起票者', type: 'user', system: true, readonly: true, hidden: true, order: 91, width: 100 },
+      { id: 'updatedAt', name: '更新日時', type: 'datetime', system: true, readonly: true, hidden: true, order: 92, width: 130 },
+      { id: 'updatedBy', name: '更新者', type: 'user', system: true, readonly: true, hidden: true, order: 93, width: 100 },
+    ],
+    rules: [
+      { id: 'r1', name: '期限切れ', enabled: true, order: 0, match: 'all', target: 'row',
+        conditions: [{ fieldId: 'due', op: 'overdue' }, { fieldId: 'status', op: 'open' }],
+        style: { bg: '#fde2e1', color: '#b42318' } },
+      { id: 'r2', name: '期限まで3日以内', enabled: true, order: 1, match: 'all', target: 'row',
+        conditions: [{ fieldId: 'due', op: 'withinDays', value: 3 }, { fieldId: 'status', op: 'open' }],
+        style: { bg: '#fff4c9' } },
+      { id: 'r3', name: '優先度が高い課題は件名を太字に', enabled: true, order: 2, match: 'all', target: 'title',
+        conditions: [{ fieldId: 'priority', op: 'is', value: 'p1' }],
+        style: { bold: true } },
+      { id: 'r4', name: '完了した課題は薄く', enabled: true, order: 3, match: 'all', target: 'row',
+        conditions: [{ fieldId: 'status', op: 'closed' }],
+        style: { color: '#8a8984' } },
+    ],
+    issues: [],
+  };
+}
+function normalize(d) {
+  const def = defaultDoc();
+  d = d && typeof d === 'object' ? d : def;
+  d.meta = Object.assign({}, def.meta, d.meta || {});
+  d.settings = Object.assign({}, def.settings, d.settings || {}, { id: 'settings' });
+  d.fields = Array.isArray(d.fields) ? d.fields : def.fields;
+  d.rules = Array.isArray(d.rules) ? d.rules : [];
+  d.issues = Array.isArray(d.issues) ? d.issues : [];
+  for (const i of d.issues) if (!i.values) i.values = {};
+  return d;
+}
+
+const embeddedText = document.getElementById('issue-data').textContent.trim();
+let embedded = null;
+try { embedded = JSON.parse(embeddedText); } catch (e) { embedded = null; }
+const wasBlank = !embedded;
+let doc = normalize(embedded ? clone(embedded) : defaultDoc());
+if (!doc.meta.fileId) doc.meta.fileId = uid();
+let base = clone(doc);          // 最後にファイルと同期した内容（マージの基準）
+let undoStack = [], redoStack = [];
+
+let me = LS.get('kk-user', '');
+const prefs = Object.assign({ autosave: true, view: 'table' }, LS.get('kk-prefs', {}));
+const ui = {
+  view: prefs.view || 'table', search: '', quick: 'all', filters: {},
+  sort: { fid: 'no', dir: 1 }, sel: null, editing: null, rowIds: [], colIds: [],
+};
+const file = { handle: null, name: '', lastModified: 0, perm: false, saving: false, again: false, pendingRemote: null, error: '' };
+let storedHandle = null;
+
+const activeFields = () => doc.fields.filter(f => !f.deleted).sort((a, b) => a.order - b.order);
+const visibleFields = () => activeFields().filter(f => !f.hidden);
+const fieldById = id => doc.fields.find(f => f.id === id && !f.deleted);
+const activeIssues = () => doc.issues.filter(i => !i.deleted);
+const issueById = id => doc.issues.find(i => i.id === id);
+const optById = (f, id) => (f.options || []).find(o => o.id === id);
+const activeRules = () => doc.rules.filter(r => !r.deleted).sort((a, b) => a.order - b.order);
+const getVal = (i, f) => (SYS_PROP[f.id] ? i[SYS_PROP[f.id]] : i.values[f.id]);
+const docBody = d => JSON.stringify({ s: d.settings, f: d.fields, r: d.rules, i: d.issues });
+const isDirty = () => docBody(doc) !== docBody(base);
+const nextNo = () => doc.issues.reduce((m, i) => Math.max(m, i.no || 0), 0) + 1;
+
+function fmt(f, v) {
+  if (isEmpty(v) && f.type !== 'number') return '';
+  if (v == null || v === '') return '';
+  switch (f.type) {
+    case 'no': return '#' + v;
+    case 'select': { const o = optById(f, v); return o ? o.label : ''; }
+    case 'multiselect': return v.map(id => (optById(f, id) || {}).label).filter(Boolean).join(', ');
+    case 'checkbox': return v ? '✓' : '';
+    case 'date': return String(v).replace(/-/g, '/');
+    case 'datetime': return fmtDateTime(v);
+    case 'number': return Number(v).toLocaleString('ja-JP', { maximumFractionDigits: 10 });
+    default: return String(v);
+  }
+}
+const displayText = (i, f) => fmt(f, getVal(i, f));
+function pill(o) { return `<span class="pill" style="--c:${esc(o.color || '#8a8984')}">${esc(o.label)}</span>`; }
+
+function statusField() { return fieldById('status'); }
+function isOpen(i) { const f = statusField(); if (!f) return true; const o = optById(f, i.values.status); return !(o && o.done); }
+function dueOf(i) { const f = fieldById(doc.settings.dueField); if (!f) return ''; return dateOf(f, getVal(i, f)); }
+function isOverdue(i) { const d = dueOf(i); return !!d && d < today(); }
+function isDueSoon(i) { const d = dueOf(i); const t = today(); return !!d && d >= t && d <= addDays(t, 7); }
+function assigneeOf(i) { const f = fieldById(doc.settings.assigneeField); return f ? String(getVal(i, f) || '') : ''; }
+function dateOf(f, v) { if (!v) return ''; if (f.type === 'datetime') return ymd(new Date(v)); return String(v); }
+function knownUsers() {
+  const s = new Set();
+  const uf = activeFields().filter(f => f.type === 'user' && !SYS_PROP[f.id]);
+  for (const i of activeIssues()) {
+    for (const f of uf) { const v = i.values[f.id]; if (v) s.add(v); }
+    if (i.createdBy) s.add(i.createdBy);
+  }
+  if (me) s.add(me);
+  return Array.from(s).sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+/* ---------- 色分けルール ---------- */
+const OPS = {
+  text: [['contains', 'を含む', 't'], ['notContains', 'を含まない', 't'], ['eq', 'と等しい', 't'], ['neq', 'と等しくない', 't'], ['empty', 'が空欄', ''], ['notEmpty', 'が空欄でない', '']],
+  number: [['eq', '＝', 'n'], ['neq', '≠', 'n'], ['gt', '＞', 'n'], ['gte', '≧', 'n'], ['lt', '＜', 'n'], ['lte', '≦', 'n'], ['empty', 'が空欄', ''], ['notEmpty', 'が空欄でない', '']],
+  date: [['overdue', 'が今日より前', ''], ['today', 'が今日', ''], ['withinDays', 'が今日から○日以内', 'd'], ['olderThanDays', 'が○日以上前', 'd'], ['before', 'が指定日より前', 'D'], ['after', 'が指定日より後', 'D'], ['empty', 'が空欄', ''], ['notEmpty', 'が空欄でない', '']],
+  select: [['is', 'が次の値', 'o'], ['isNot', 'が次の値以外', 'o'], ['open', 'が未完了（完了扱い以外）', ''], ['closed', 'が完了扱い', ''], ['empty', 'が空欄', ''], ['notEmpty', 'が空欄でない', '']],
+  multiselect: [['has', 'に次の値を含む', 'o'], ['notHas', 'に次の値を含まない', 'o'], ['empty', 'が空欄', ''], ['notEmpty', 'が空欄でない', '']],
+  checkbox: [['checked', 'がオン', ''], ['unchecked', 'がオフ', '']],
+};
+function opsFor(f) {
+  if (!f) return [];
+  if (f.type === 'longtext' || f.type === 'user') return OPS.text;
+  if (f.type === 'no') return OPS.number;
+  if (f.type === 'datetime') return OPS.date;
+  return OPS[f.type] || OPS.text;
+}
+function testCond(i, c) {
+  const f = fieldById(c.fieldId);
+  if (!f) return false;
+  const v = getVal(i, f);
+  const s = String(v == null ? '' : v).toLowerCase();
+  const cv = String(c.value == null ? '' : c.value).toLowerCase();
+  const n = Number(v), cn = Number(c.value);
+  const hasNum = v !== '' && v != null && !isNaN(n);
+  const d = dateOf(f, v), t = today(), days = Math.max(0, Number(c.value) || 0);
+  switch (c.op) {
+    case 'empty': return isEmpty(v);
+    case 'notEmpty': return !isEmpty(v);
+    case 'contains': return cv !== '' && s.includes(cv);
+    case 'notContains': return !s.includes(cv) || cv === '';
+    case 'eq': return f.type === 'number' || f.type === 'no' ? hasNum && n === cn : s === cv;
+    case 'neq': return f.type === 'number' || f.type === 'no' ? !(hasNum && n === cn) : s !== cv;
+    case 'gt': return hasNum && n > cn;
+    case 'gte': return hasNum && n >= cn;
+    case 'lt': return hasNum && n < cn;
+    case 'lte': return hasNum && n <= cn;
+    case 'overdue': return !!d && d < t;
+    case 'today': return d === t;
+    case 'withinDays': return !!d && d >= t && d <= addDays(t, days);
+    case 'olderThanDays': return !!d && d <= addDays(t, -days);
+    case 'before': return !!d && !!c.value && d < c.value;
+    case 'after': return !!d && !!c.value && d > c.value;
+    case 'is': return v === c.value;
+    case 'isNot': return v !== c.value;
+    case 'open': { const o = optById(f, v); return !(o && o.done); }
+    case 'closed': { const o = optById(f, v); return !!(o && o.done); }
+    case 'has': return Array.isArray(v) && v.includes(c.value);
+    case 'notHas': return !(Array.isArray(v) && v.includes(c.value));
+    case 'checked': return !!v;
+    case 'unchecked': return !v;
+  }
+  return false;
+}
+function ruleMatches(r, i) {
+  const cs = (r.conditions || []).filter(c => c.fieldId && c.op);
+  if (!cs.length) return false;
+  return r.match === 'any' ? cs.some(c => testCond(i, c)) : cs.every(c => testCond(i, c));
+}
+function ruleStyles(i) {
+  // 上にあるルールほど優先（下から順に重ねる）
+  const out = { row: {}, cells: {} };
+  const rules = activeRules().filter(r => r.enabled).reverse();
+  for (const r of rules) {
+    if (!ruleMatches(r, i)) continue;
+    const st = {};
+    for (const k of ['bg', 'color', 'bold', 'strike']) if (r.style && r.style[k]) st[k] = r.style[k];
+    if (r.target === 'row' || !r.target) Object.assign(out.row, st);
+    else out.cells[r.target] = Object.assign(out.cells[r.target] || {}, st);
+  }
+  return out;
+}
+function styleCss(st) {
+  if (!st) return '';
+  let s = '';
+  if (st.bg) s += `background-color:${st.bg};`;
+  if (st.color) s += `color:${st.color};`;
+  if (st.bold) s += 'font-weight:700;';
+  if (st.strike) s += 'text-decoration:line-through;';
+  return esc(s);
+}
+const cellStyle = (rs, fid) => Object.assign({}, rs.row, rs.cells[fid] || {});
+function condSummary(c) {
+  const f = fieldById(c.fieldId);
+  if (!f) return '（削除された項目）';
+  const op = opsFor(f).find(o => o[0] === c.op);
+  if (!op) return f.name;
+  let val = '';
+  if (op[2] === 'o') { const o = optById(f, c.value); val = o ? `「${o.label}」` : '（未選択）'; }
+  else if (op[2] === 'd') val = '';
+  else if (op[2]) val = `「${c.value == null ? '' : c.value}」`;
+  const label = op[2] === 'd' ? op[1].replace('○', String(c.value || 0)) : op[1];
+  if (op[2] === 'n') return `${f.name} ${label} ${c.value}`;
+  if (op[2] === 'o' || op[2] === 't' || op[2] === 'D') return `${f.name} ${label} ${val}`;
+  return `${f.name} ${label}`;
+}
+
+/* ---------- 入力値の変換（貼り付け・取り込み・セル入力） ---------- */
+function parseDate(raw) {
+  const s = toHalf(String(raw).trim());
+  if (!s) return '';
+  let m = s.match(/^(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})日?/);
+  if (m) return m[1] + '-' + pad(+m[2]) + '-' + pad(+m[3]);
+  m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})[\/\-.月](\d{1,2})日?$/);
+  if (m) return new Date().getFullYear() + '-' + pad(+m[1]) + '-' + pad(+m[2]);
+  if (/^\d{5}$/.test(s)) { const d = new Date(1899, 11, 30 + Number(s)); return ymd(d); }   // Excelのシリアル値
+  const t = Date.parse(s);
+  return isNaN(t) ? null : ymd(new Date(t));
+}
+function addOption(f, label) {
+  f.options = f.options || [];
+  const o = { id: uid(), label, color: PALETTE[f.options.length % PALETTE.length] };
+  f.options.push(o);
+  return o.id;
+}
+function findOption(f, label) {
+  const l = String(label).trim().toLowerCase();
+  return (f.options || []).find(o => o.label.trim().toLowerCase() === l);
+}
+// 戻り値: {ok, value}。選択肢にない値は autoAdd のとき選択肢として追加する
+function convertInput(f, raw, autoAdd) {
+  const s = raw == null ? '' : String(raw);
+  const t = s.trim();
+  switch (f.type) {
+    case 'number': {
+      if (!t) return { ok: true, value: null };
+      const n = Number(toHalf(t).replace(/[,\s円¥$%]/g, ''));
+      return isNaN(n) ? { ok: false } : { ok: true, value: n };
+    }
+    case 'date': {
+      if (!t) return { ok: true, value: null };
+      const d = parseDate(t);
+      return d ? { ok: true, value: d } : { ok: false };
+    }
+    case 'select': {
+      if (!t) return { ok: true, value: null };
+      const o = findOption(f, t);
+      if (o) return { ok: true, value: o.id };
+      return autoAdd ? { ok: true, value: addOption(f, t) } : { ok: false };
+    }
+    case 'multiselect': {
+      const ids = [];
+      for (const p of t.split(/[,、;；\n]/).map(x => x.trim()).filter(Boolean)) {
+        const o = findOption(f, p);
+        if (o) ids.push(o.id); else if (autoAdd) ids.push(addOption(f, p));
+      }
+      return { ok: true, value: ids };
+    }
+    case 'checkbox': return { ok: true, value: /^(true|1|yes|y|on|はい|○|〇|◯|✓|✔|済|済み|x)$/i.test(t) };
+    case 'longtext': return { ok: true, value: s.replace(/\s+$/, '') };
+    default: return { ok: true, value: t };
+  }
+}
+function parseDelimited(text, delim) {
+  const rows = []; let row = [], cell = '', q = false;
+  text = text.replace(/\r\n?/g, '\n');
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += ch;
+      continue;
+    }
+    if (ch === '"' && cell === '') { q = true; continue; }
+    if (ch === delim) { row.push(cell); cell = ''; continue; }
+    if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; continue; }
+    cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+/* ---------- 変更・元に戻す ---------- */
+function touch(i) { i.updatedAt = Date.now(); i.updatedBy = me || '（名前未設定）'; }
+function setValuesIn(i, patch) {
+  let changed = false;
+  for (const k in patch) {
+    if (J(i.values[k]) === J(patch[k]) || (isEmpty(i.values[k]) && isEmpty(patch[k]))) continue;
+    if (isEmpty(patch[k])) delete i.values[k]; else i.values[k] = patch[k];
+    changed = true;
+  }
+  if (changed) touch(i);
+  return changed;
+}
+function newIssue(values) {
+  const now = Date.now();
+  const st = statusField();
+  const i = { id: uid(), no: nextNo(), values: {}, createdAt: now, createdBy: me || '（名前未設定）', updatedAt: now, updatedBy: me || '（名前未設定）' };
+  if (st && st.options && st.options[0]) i.values.status = st.options[0].id;
+  for (const k in values || {}) if (!isEmpty(values[k])) i.values[k] = values[k];
+  doc.issues.push(i);
+  return i;
+}
+function snapshot() { return JSON.stringify({ settings: doc.settings, fields: doc.fields, rules: doc.rules, issues: doc.issues }); }
+function restore(s) { const o = JSON.parse(s); doc.settings = o.settings; doc.fields = o.fields; doc.rules = o.rules; doc.issues = o.issues; }
+function mutate(fn) {
+  const before = snapshot();
+  const r = fn();
+  if (snapshot() !== before) {
+    undoStack.push(before); if (undoStack.length > 100) undoStack.shift();
+    redoStack = [];
+    changed();
+  }
+  return r;
+}
+function undo() { if (!undoStack.length) return toast('元に戻せる操作がありません'); redoStack.push(snapshot()); restore(undoStack.pop()); changed(); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); changed(); }
+function changed() { renderAll(); scheduleAutosave(); }
+function setValues(iid, patch) { mutate(() => { const i = issueById(iid); if (i) setValuesIn(i, patch); }); }
+
+/* ============================================================
+   マージ
+   ============================================================ */
+function flatIssue(i) {
+  const o = { no: i.no, deleted: !!i.deleted, createdAt: i.createdAt, createdBy: i.createdBy };
+  for (const k in i.values) o['v.' + k] = i.values[k];
+  return o;
+}
+function flatPlain(r) { const o = Object.assign({}, r); delete o.id; return o; }
+function mergeCollection(bl, ll, rl, kind, flat, opts, conflicts) {
+  const map = l => new Map((l || []).map(x => [x.id, x]));
+  const B = map(bl), L = map(ll), R = map(rl);
+  const ids = [...L.keys()];
+  for (const id of R.keys()) if (!L.has(id)) ids.push(id);
+  const out = [];
+  for (const id of ids) {
+    const b = B.get(id), l = L.get(id), r = R.get(id);
+    if (!r) { out.push({ id, rec: l, src: 'local' }); continue; }
+    if (!l) { out.push({ id, rec: r, src: 'remote' }); continue; }
+    const fb = b ? flat(b) : null, fl = flat(l), fr = flat(r);
+    const res = {};
+    const keys = new Set([...Object.keys(fl), ...Object.keys(fr)]);
+    for (const k of keys) {
+      const lv = J(fl[k]), rv = J(fr[k]), bv = fb ? J(fb[k]) : undefined;
+      if (lv === rv) res[k] = fl[k];
+      else if (fb && lv === bv) res[k] = fr[k];
+      else if (fb && rv === bv) res[k] = fl[k];
+      else if (opts.preferNewer) res[k] = (r.updatedAt || 0) > (l.updatedAt || 0) ? fr[k] : fl[k];
+      else { res[k] = fl[k]; conflicts.push({ kind, id, key: k, local: fl[k], remote: fr[k], l, r, holder: res }); }
+    }
+    out.push({ id, flat: res, l, r });
+  }
+  return out;
+}
+function mergeDocs(b, l, r, opts = {}) {
+  const conflicts = [];
+  b = b || { issues: [], fields: [], rules: [], settings: null };
+  const parts = {
+    issues: mergeCollection(b.issues, l.issues, r.issues, 'issue', flatIssue, opts, conflicts),
+    fields: mergeCollection(b.fields, l.fields, r.fields, 'field', flatPlain, opts, conflicts),
+    rules: mergeCollection(b.rules, l.rules, r.rules, 'rule', flatPlain, opts, conflicts),
+    settings: mergeCollection(b.settings ? [b.settings] : [], [l.settings], [r.settings], 'settings', flatPlain, opts, conflicts),
+  };
+  function finalize() {
+    const plain = list => list.map(x => x.rec ? x.rec : Object.assign({ id: x.id }, x.flat));
+    const issues = parts.issues.map(x => {
+      if (x.rec) return x.rec;
+      const i = { id: x.id, values: {} };
+      for (const k in x.flat) {
+        if (x.flat[k] === undefined) continue;
+        if (k.startsWith('v.')) i.values[k.slice(2)] = x.flat[k]; else i[k] = x.flat[k];
+      }
+      if (!i.deleted) delete i.deleted;
+      const newer = (x.r.updatedAt || 0) > (x.l.updatedAt || 0) ? x.r : x.l;
+      i.updatedAt = newer.updatedAt; i.updatedBy = newer.updatedBy;
+      return i;
+    });
+    // 同じ番号が重なったら、相手側（既に共有済み）の番号を優先し、残りを振り直す
+    const remoteIds = new Set(r.issues.map(i => i.id));
+    const byNo = new Map();
+    for (const i of issues) { if (!byNo.has(i.no)) byNo.set(i.no, []); byNo.get(i.no).push(i); }
+    let max = issues.reduce((m, i) => Math.max(m, i.no || 0), 0);
+    for (const [, group] of byNo) {
+      if (group.length < 2) continue;
+      group.sort((a, b2) => (remoteIds.has(b2.id) - remoteIds.has(a.id)) || (a.createdAt - b2.createdAt));
+      for (const i of group.slice(1)) i.no = ++max;
+    }
+    const settings = plain(parts.settings)[0];
+    return normalize({ meta: clone(l.meta), settings, fields: plain(parts.fields), rules: plain(parts.rules), issues });
+  }
+  return { conflicts, finalize };
+}
+function conflictLabel(c, rDoc) {
+  if (c.kind === 'issue') {
+    const rec = c.l;
+    const title = (rec.values && rec.values.title) || '';
+    let what = c.key;
+    if (c.key.startsWith('v.')) { const f = fieldById(c.key.slice(2)) || (rDoc.fields.find(x => x.id === c.key.slice(2))); what = f ? f.name : c.key; }
+    else if (c.key === 'deleted') what = '削除';
+    else if (c.key === 'no') what = 'ID';
+    return `#${rec.no} ${title} ─ ${what}`;
+  }
+  const names = { name: '名前', type: '種類', options: '選択肢', hidden: '表示', width: '列幅', order: '並び順', deleted: '削除', title: '管理表の名前', enabled: '有効', conditions: '条件', style: '書式', target: '適用先', match: '条件の組み合わせ' };
+  const k = names[c.key] || c.key;
+  if (c.kind === 'field') return `項目「${c.l.name}」 ─ ${k}`;
+  if (c.kind === 'rule') return `色分けルール「${c.l.name}」 ─ ${k}`;
+  return `設定 ─ ${k}`;
+}
+function conflictValue(c, v, rDoc) {
+  if (c.kind === 'issue' && c.key.startsWith('v.')) {
+    const fid = c.key.slice(2);
+    const f = fieldById(fid) || rDoc.fields.find(x => x.id === fid);
+    if (f) { const s = fmt(f, v); return s === '' ? '（空欄）' : s; }
+  }
+  if (c.key === 'deleted') return v ? '削除する' : '残す';
+  if (v === undefined || v === null || v === '') return '（空欄）';
+  if (typeof v === 'object') { const s = JSON.stringify(v); return s.length > 80 ? s.slice(0, 80) + '…' : s; }
+  return String(v);
+}
+function askConflicts(conflicts, rDoc) {
+  return new Promise(resolve => {
+    const who = rDoc.meta.savedBy || '相手';
+    const body = `<p style="margin-top:0">あなたと <b>${esc(who)}</b> さんが同じ箇所を変更しました。残す内容を選んでください。</p>` +
+      conflicts.map((c, n) => `<div class="conf-row"><div class="ttl">${esc(conflictLabel(c, rDoc))}</div>
+        <label><input type="radio" name="cf${n}" value="l" checked><span class="who">あなた</span><span>${esc(conflictValue(c, c.local, rDoc))}</span></label>
+        <label><input type="radio" name="cf${n}" value="r"><span class="who">${esc(who)}</span><span>${esc(conflictValue(c, c.remote, rDoc))}</span></label></div>`).join('');
+    const m = openModal({
+      title: `変更が重なりました（${conflicts.length}件）`, body, wide: true, closable: false,
+      foot: `<div class="left"><button class="btn sm" data-k="allL">すべて自分の内容</button><button class="btn sm" data-k="allR">すべて${esc(who)}さんの内容</button></div>
+             <button class="btn" data-k="cancel">保存をやめる</button><button class="btn primary" data-k="ok">決定</button>`,
+    });
+    m.addEventListener('click', e => {
+      const k = e.target.dataset && e.target.dataset.k;
+      if (k === 'allL' || k === 'allR') $$('input[type=radio]', m).forEach(r => { r.checked = r.value === (k === 'allL' ? 'l' : 'r'); });
+      if (k === 'cancel') { closeModal(m); resolve(false); }
+      if (k === 'ok') {
+        conflicts.forEach((c, n) => { const v = $(`input[name=cf${n}]:checked`, m).value; if (v === 'r') c.holder[c.key] = c.remote; });
+        closeModal(m); resolve(true);
+      }
+    });
+  });
+}
+
+/* ============================================================
+   ファイルの読み書き
+   ============================================================ */
+function extractData(text) {
+  const a = text.indexOf(DATA_OPEN);
+  if (a < 0) return undefined;
+  const b = text.indexOf(DATA_CLOSE, a);
+  if (b < 0) throw new Error('broken');
+  const json = text.slice(a + DATA_OPEN.length, b).trim();
+  if (json === 'null' || json === '') return null;
+  return normalize(JSON.parse(json));
+}
+function serialize(d) {
+  return JSON.stringify(d).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+function buildHtml(templateText, d) {
+  let t = templateText;
+  if (!t || t.indexOf(DATA_OPEN) < 0) t = TEMPLATE;
+  const a = t.indexOf(DATA_OPEN), b = t.indexOf(DATA_CLOSE, a);
+  return t.slice(0, a + DATA_OPEN.length) + serialize(d) + t.slice(b);
+}
+async function writeFile(handle, html) {
+  const w = await handle.createWritable();
+  await w.write(new Blob([html], { type: 'text/html' }));
+  await w.close();
+}
+async function hasPerm(h, request) {
+  try {
+    const o = { mode: 'readwrite' };
+    if ((await h.queryPermission(o)) === 'granted') return true;
+    if (request) return (await h.requestPermission(o)) === 'granted';
+  } catch (e) { /* 権限の確認に失敗 */ }
+  return false;
+}
+const idb = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('kadai-kanri', 1); r.onupgradeneeded = () => r.result.createObjectStore('handles'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async get(k) { try { const db = await this.open(); return await new Promise(res => { const q = db.transaction('handles').objectStore('handles').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch (e) { return null; } },
+  async set(k, v) { try { const db = await this.open(); db.transaction('handles', 'readwrite').objectStore('handles').put(v, k); } catch (e) { /* 覚えられなくても動作は続ける */ } },
+};
+const handleKey = () => 'h:' + location.href.split('#')[0];
+const currentFileName = () => { try { return decodeURIComponent(location.pathname.split('/').pop() || ''); } catch (e) { return ''; } };
+
+async function pickFile() {
+  if (!FS) { unsupported(); return null; }
+  try {
+    const [h] = await window.showOpenFilePicker({ multiple: false, types: [{ description: '課題管理表（HTML）', accept: { 'text/html': ['.html', '.htm'] } }] });
+    return h;
+  } catch (e) { return null; }
+}
+async function connect(h, { askName = true } = {}) {
+  if (!h || !(await hasPerm(h, true))) { toast('ファイルへのアクセスが許可されませんでした', true); return false; }
+  let f, text, remote;
+  try { f = await h.getFile(); text = await f.text(); remote = extractData(text); }
+  catch (e) { toast('ファイルを読み込めませんでした。同期中か、壊れている可能性があります。', true); return false; }
+  if (remote === undefined) { alertModal('このファイルは課題管理表ではないようです。', '今開いている課題管理表のHTMLファイルを選んでください。'); return false; }
+  const cur = currentFileName();
+  if (askName && cur && f.name !== cur && !(await confirmModal('別の名前のファイルが選ばれました', `今開いているファイルは「${cur}」ですが、「${f.name}」が選ばれました。このファイルに保存しますか？`, 'このファイルに保存する'))) return false;
+  if (remote && remote.meta.fileId && remote.meta.fileId !== doc.meta.fileId) {
+    if (wasBlank && !base.meta.saveId) {
+      // まだ一度も保存していない空の管理表 → 選んだファイルの内容と合わせる
+      doc.meta.fileId = remote.meta.fileId; base.meta.fileId = remote.meta.fileId;
+    } else if (!(await confirmModal('別の管理表のファイルです', `選んだファイル「${f.name}」は、今開いている管理表とは別の管理表です。選んだファイルの内容を読み込みますか？${isDirty() ? '\n（保存していない変更は失われます）' : ''}`, '読み込む'))) return false;
+    else { doc = clone(remote); base = clone(remote); undoStack = []; redoStack = []; }
+  }
+  file.handle = h; file.name = f.name; file.lastModified = f.lastModified; file.perm = true; file.error = '';
+  storedHandle = h;
+  idb.set(handleKey(), h);
+  if (remote) await receiveRemote(remote, { quiet: !remote.meta.saveId || remote.meta.saveId === base.meta.saveId });
+  renderAll();
+  toast(`「${f.name}」に接続しました`);
+  if (isDirty()) scheduleAutosave(300);
+  return true;
+}
+function unsupported() { alertModal('このブラウザでは保存できません', 'ファイルへの保存には Chrome または Edge が必要です。\nこのブラウザでは「メニュー → CSVで書き出す」でデータを持ち出せます。'); }
+
+// 他の人が保存した内容を受け取る
+async function receiveRemote(remote, { quiet } = {}) {
+  if (!remote.meta.saveId || remote.meta.saveId === base.meta.saveId) return true;
+  if (!isDirty()) {
+    if (ui.editing || openModals.length) { file.pendingRemote = remote; renderBanners(); return true; }
+    doc = clone(remote); base = clone(remote); undoStack = []; redoStack = []; file.pendingRemote = null;
+    renderAll();
+    if (!quiet) toast(`${remote.meta.savedBy || '誰か'}さんの変更を反映しました（${fmtTime(remote.meta.savedAt)}）`);
+    return true;
+  }
+  file.pendingRemote = remote; renderBanners();
+  return true;
+}
+async function mergeIn(remote) {
+  const m = mergeDocs(base, doc, remote);
+  if (m.conflicts.length && !(await askConflicts(m.conflicts, remote))) return false;
+  doc = m.finalize();
+  doc.meta = clone(remote.meta);
+  base = clone(remote);
+  undoStack = []; redoStack = [];
+  file.pendingRemote = null;
+  renderAll();
+  toast(`${remote.meta.savedBy || '誰か'}さんの変更を取り込みました`);
+  return true;
+}
+async function save({ auto = false } = {}) {
+  if (!FS) { if (!auto) unsupported(); return; }
+  if (!file.handle) {
+    if (auto) return;
+    if (storedHandle && (await hasPerm(storedHandle, true))) { if (!(await connect(storedHandle, { askName: false }))) return; }
+    else { const h = await pickFile(); if (!h || !(await connect(h))) return; }
+    if (!isDirty()) return;
+  }
+  if (file.saving) { file.again = true; return; }
+  if (!(await hasPerm(file.handle, !auto))) { file.perm = false; renderAll(); return; }
+  if (auto && ui.editing) { scheduleAutosave(); return; }
+  file.saving = true; renderStatus();
+  try {
+    let text = '', remote = null;
+    try { const f = await file.handle.getFile(); text = await f.text(); remote = extractData(text); }
+    catch (e) {
+      if (!(await confirmModal('ファイルを読み込めませんでした', 'ファイルが同期中か、壊れている可能性があります。今の内容で上書き保存しますか？', '上書き保存する'))) return;
+      text = '';
+    }
+    if (remote && remote.meta.saveId && remote.meta.saveId !== base.meta.saveId) {
+      if (!(await mergeIn(remote))) return;
+    }
+    if (!isDirty() && remote && remote.meta.saveId) { file.error = ''; return; }
+    const out = clone(doc);
+    out.meta.saveId = uid(); out.meta.savedAt = Date.now(); out.meta.savedBy = me || '（名前未設定）';
+    await writeFile(file.handle, buildHtml(text, out));
+    const f2 = await file.handle.getFile();
+    file.lastModified = f2.lastModified; file.error = '';
+    base = clone(out); doc.meta = clone(out.meta);
+    file.pendingRemote = null;
+  } catch (e) {
+    file.error = '保存に失敗しました: ' + (e && e.message ? e.message : e);
+    toast(file.error, true);
+  } finally {
+    file.saving = false;
+    renderAll();
+    if (file.again) { file.again = false; save({ auto: true }); }
+  }
+}
+let autoTimer = null;
+function scheduleAutosave(ms = 1200) {
+  renderStatus();
+  if (!prefs.autosave || !file.handle) return;
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(() => { if (isDirty()) save({ auto: true }); }, ms);
+}
+async function poll() {
+  if (!file.handle || file.saving) return;
+  try {
+    if ((await file.handle.queryPermission({ mode: 'readwrite' })) !== 'granted') { if (file.perm) { file.perm = false; renderAll(); } return; }
+    const f = await file.handle.getFile();
+    if (f.lastModified === file.lastModified) return;
+    const text = await f.text();
+    let remote;
+    try { remote = extractData(text); } catch (e) { return; }   // 同期の途中など。次回また確認する
+    if (!remote) return;
+    file.lastModified = f.lastModified;
+    if (remote.meta.saveId === base.meta.saveId) return;
+    await receiveRemote(remote);
+    if (file.pendingRemote && prefs.autosave) scheduleAutosave(400);
+  } catch (e) {
+    if (!file.error) { file.error = 'ファイルを確認できません（ネットワークやフォルダの状態を確認してください）'; renderBanners(); }
+    return;
+  }
+  if (file.error) { file.error = ''; renderBanners(); }
+}
+async function saveAs() {
+  if (!FS) return unsupported();
+  let h;
+  try { h = await window.showSaveFilePicker({ suggestedName: (doc.settings.title || '課題管理表') + '.html', types: [{ description: '課題管理表（HTML）', accept: { 'text/html': ['.html'] } }] }); }
+  catch (e) { return; }
+  const out = clone(doc);
+  out.meta.fileId = uid(); out.meta.saveId = uid(); out.meta.savedAt = Date.now(); out.meta.savedBy = me || '';
+  try {
+    await writeFile(h, buildHtml(TEMPLATE, out));
+    const f = await h.getFile();
+    doc = clone(out); base = clone(out);
+    file.handle = h; file.name = f.name; file.lastModified = f.lastModified; file.perm = true;
+    storedHandle = h;
+    renderAll();
+    toast(`「${f.name}」として保存しました。今後はこのファイルに保存されます。`);
+  } catch (e) { toast('保存に失敗しました', true); }
+}
+async function createBlank() {
+  if (!FS) return unsupported();
+  const keep = await confirmModal('新しい管理表を作る', '今の管理表の「項目」「色分けルール」「設定」を引き継いで、課題が空の管理表を作ります。\n引き継がずに初期状態から作る場合は「初期状態で作る」を選んでください。', '項目とルールを引き継ぐ', '初期状態で作る');
+  if (keep === null) return;
+  let h;
+  try { h = await window.showSaveFilePicker({ suggestedName: '新しい課題管理表.html', types: [{ description: '課題管理表（HTML）', accept: { 'text/html': ['.html'] } }] }); }
+  catch (e) { return; }
+  const d = keep ? clone(doc) : defaultDoc();
+  d.issues = []; d.meta = defaultDoc().meta; d.meta.fileId = uid();
+  if (keep) d.settings.title = '新しい課題管理表';
+  try { await writeFile(h, buildHtml(TEMPLATE, d)); toast('新しい管理表を作りました。保存したファイルを開いて使ってください。'); }
+  catch (e) { toast('作成に失敗しました', true); }
+}
+async function importOtherFile() {
+  if (!FS) return unsupported();
+  const h = await pickFile();
+  if (!h) return;
+  let other;
+  try { other = extractData(await (await h.getFile()).text()); } catch (e) { other = undefined; }
+  if (!other) return alertModal('取り込めませんでした', '課題管理表のHTMLファイルを選んでください。');
+  if (other.meta.fileId !== doc.meta.fileId && !(await confirmModal('別の管理表です', 'このファイルは別の管理表から作られたものです。それでも課題を取り込みますか？', '取り込む'))) return;
+  const before = new Map(doc.issues.map(i => [i.id, J(i)]));
+  mutate(() => {
+    const m = mergeDocs(null, doc, other, { preferNewer: true });
+    const merged = m.finalize();
+    merged.meta = doc.meta;
+    doc.settings = merged.settings; doc.fields = merged.fields; doc.rules = merged.rules; doc.issues = merged.issues;
+  });
+  let added = 0, upd = 0;
+  for (const i of doc.issues) { if (!before.has(i.id)) added++; else if (before.get(i.id) !== J(i)) upd++; }
+  toast(`取り込みました（追加 ${added}件・更新 ${upd}件）`);
+}
+
+/* ============================================================
+   画面
+   ============================================================ */
+const main = $('#main');
+function renderAll() {
+  document.title = doc.settings.title || '課題管理表';
+  const ti = $('#titleInput');
+  if (document.activeElement !== ti) ti.value = doc.settings.title || '';
+  $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === ui.view));
+  renderStatus(); renderBanners(); renderToolbar(); renderView();
+}
+function renderStatus() {
+  const fc = $('#fileChip'), sc = $('#saveChip');
+  const setChip = (el, cls, text, tip) => { el.className = 'chip ' + cls; el.lastElementChild.textContent = text; el.dataset.tip = tip || ''; };
+  if (!FS) setChip(fc, 'off', '保存できないブラウザ', 'Chrome または Edge で開いてください');
+  else if (!file.handle) setChip(fc, 'off', 'ファイル未接続', '保存するとファイルに接続されます');
+  else if (!file.perm) setChip(fc, 'warn', file.name + '（許可が必要）', '');
+  else setChip(fc, 'ok', file.name, '開いている間、他の人の変更を自動で確認しています');
+  const dirty = isDirty();
+  if (file.saving) setChip(sc, 'warn', '保存中…');
+  else if (dirty) setChip(sc, 'warn', '未保存の変更あり', prefs.autosave && file.handle ? '自動で保存されます' : '');
+  else if (base.meta.savedAt) setChip(sc, 'ok', `保存済み ${fmtDateTime(base.meta.savedAt).slice(5)}${base.meta.savedBy ? '・' + base.meta.savedBy : ''}`, '最後に保存した日時と人');
+  else setChip(sc, '', 'まだ保存されていません');
+  $('#saveBtn').classList.toggle('primary', dirty);
+}
+function renderBanners() {
+  let h = '';
+  if (!FS) h += `<div class="banner err">このブラウザではファイルに保存できません。<b>Chrome または Edge</b> で開いてください。</div>`;
+  else if (!file.handle && storedHandle) h += `<div class="banner info">前回このファイルに接続した設定が残っています。<button class="btn sm primary" data-act="reconnect">接続して保存できるようにする</button></div>`;
+  else if (!file.handle && (isDirty() || doc.issues.length)) h += `<div class="banner info">保存するには、このHTMLファイル自身を保存先に選びます（最初の1回だけ）。<button class="btn sm primary" data-act="connect">保存先にこのファイルを選ぶ</button></div>`;
+  if (file.handle && !file.perm) h += `<div class="banner">ファイルへのアクセス許可が切れました。<button class="btn sm primary" data-act="reperm">許可する</button></div>`;
+  if (file.pendingRemote) {
+    const r = file.pendingRemote;
+    h += `<div class="banner"><span><b>${esc(r.meta.savedBy || '誰か')}</b> さんが ${fmtTime(r.meta.savedAt)} に管理表を更新しました。${isDirty() ? 'あなたの未保存の変更と合わせて取り込みます。' : ''}</span><button class="btn sm primary" data-act="takeRemote">取り込む</button></div>`;
+  }
+  if (file.error) h += `<div class="banner err">${esc(file.error)}</div>`;
+  $('#banners').innerHTML = h;
+}
+const QUICK = [['all', 'すべて'], ['open', '未完了'], ['overdue', '期限切れ'], ['soon', '7日以内に期限'], ['mine', '自分の担当'], ['closed', '完了']];
+function renderToolbar() {
+  const tb = $('#toolbar');
+  if (ui.view === 'dash') { tb.innerHTML = `<span class="count">${activeIssues().length}件の課題</span><span class="spacer" style="flex:1"></span><button class="btn sm" data-act="settings">集計の設定</button>`; return; }
+  const keepFocus = document.activeElement && document.activeElement.id === 'searchBox';
+  const pos = keepFocus ? document.activeElement.selectionStart : 0;
+  let h = `<input class="search" id="searchBox" type="search" placeholder="検索" value="${esc(ui.search)}">`;
+  h += '<div class="qchips">' + QUICK.filter(q => q[0] !== 'mine' || fieldById(doc.settings.assigneeField)).map(q => `<button class="qchip${ui.quick === q[0] ? ' on' : ''}" data-quick="${q[0]}">${q[1]}</button>`).join('') + '</div>';
+  for (const fid in ui.filters) { const f = fieldById(fid); if (f) h += `<span class="fchip">${esc(f.name)}: ${ui.filters[fid].length}件の値<button data-act="clearFilter" data-fid="${esc(fid)}" aria-label="フィルタを解除">×</button></span>`; }
+  h += `<span class="count" id="countLbl"></span><span style="flex:1"></span>`;
+  if (ui.view === 'kanban') {
+    const opts = activeFields().filter(f => (f.type === 'select' || f.type === 'user') && !SYS_PROP[f.id]);
+    h += `<label class="count">列の区切り <select class="sel" id="kanbanField">${opts.map(f => `<option value="${esc(f.id)}"${f.id === doc.settings.kanbanField ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>`;
+  } else h += `<button class="btn sm" data-act="columns">表示する列</button>`;
+  h += `<button class="btn sm" data-act="rules">色分けルール</button><button class="btn sm" data-act="fields">項目の管理</button>`;
+  tb.innerHTML = h;
+  if (keepFocus) { const s = $('#searchBox'); s.focus(); try { s.setSelectionRange(pos, pos); } catch (e) { /* noop */ } }
+}
+function renderView() {
+  closePopover();
+  if (ui.view === 'kanban') renderKanban();
+  else if (ui.view === 'dash') renderDash();
+  else renderTable();
+}
+
+/* ---------- 絞り込み・並べ替え ---------- */
+function filterKeys(i, f) {
+  const v = getVal(i, f);
+  if (f.type === 'multiselect') { const ls = (v || []).map(id => (optById(f, id) || {}).label).filter(Boolean); return ls.length ? ls : ['']; }
+  if (f.type === 'datetime') return [v ? ymd(new Date(v)).replace(/-/g, '/') : ''];
+  return [fmt(f, v)];
+}
+function sortKey(i, f) {
+  const v = getVal(i, f);
+  if (isEmpty(v) && f.type !== 'checkbox') return null;
+  switch (f.type) {
+    case 'select': return (f.options || []).findIndex(o => o.id === v);
+    case 'multiselect': return Math.min(...v.map(id => (f.options || []).findIndex(o => o.id === id)));
+    case 'number': case 'no': case 'datetime': return Number(v);
+    case 'checkbox': return v ? 1 : 0;
+    default: return String(v);
+  }
+}
+function filteredIssues() {
+  let list = activeIssues();
+  const q = ui.quick;
+  if (q === 'open') list = list.filter(isOpen);
+  else if (q === 'closed') list = list.filter(i => !isOpen(i));
+  else if (q === 'overdue') list = list.filter(i => isOpen(i) && isOverdue(i));
+  else if (q === 'soon') list = list.filter(i => isOpen(i) && isDueSoon(i));
+  else if (q === 'mine') list = list.filter(i => me && assigneeOf(i) === me);
+  for (const fid in ui.filters) {
+    const f = fieldById(fid); if (!f) continue;
+    const set = new Set(ui.filters[fid]);
+    list = list.filter(i => filterKeys(i, f).some(k => set.has(k)));
+  }
+  const s = ui.search.trim().toLowerCase();
+  if (s) { const fs = activeFields(); list = list.filter(i => fs.some(f => displayText(i, f).toLowerCase().includes(s))); }
+  const f = fieldById(ui.sort.fid) || fieldById('no');
+  const dir = ui.sort.dir;
+  const keyed = list.map(i => [sortKey(i, f), i]);
+  keyed.sort((a, b) => {
+    const x = a[0], y = b[0];
+    if (x === null && y === null) return a[1].no - b[1].no;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ja');
+    return c ? c * dir : a[1].no - b[1].no;
+  });
+  return keyed.map(k => k[1]);
+}
+
+/* ---------- 一覧 ---------- */
+function cellHtml(i, f) {
+  const v = getVal(i, f);
+  if (f.id === 'no') return `<button class="no-link" data-act="open" data-iid="${i.id}" data-tip="詳細を開く">#${v}</button>`;
+  switch (f.type) {
+    case 'select': { const o = optById(f, v); return o ? pill(o) : ''; }
+    case 'multiselect': return (v || []).map(id => optById(f, id)).filter(Boolean).map(pill).join(' ');
+    case 'checkbox': return `<span class="cb${v ? ' on' : ''}" data-act="toggle">${v ? '✓' : ''}</span>`;
+    case 'longtext': { const s = String(v || ''); const first = s.split('\n')[0]; return esc(first) + (s.includes('\n') ? ' <span class="muted">…</span>' : ''); }
+    default: return esc(fmt(f, v));
+  }
+}
+function renderTable() {
+  const fields = visibleFields();
+  const rows = filteredIssues();
+  ui.rowIds = rows.map(i => i.id); ui.colIds = fields.map(f => f.id);
+  const cl = $('#countLbl'); if (cl) cl.textContent = `${rows.length} / ${activeIssues().length}件`;
+  let wrap = $('#tableWrap');
+  if (!wrap) { main.innerHTML = '<div class="table-wrap" id="tableWrap"></div>'; wrap = $('#tableWrap'); }
+  let h = '<table class="grid"><colgroup>' + fields.map(f => `<col style="width:${f.width || 120}px">`).join('') + '<col style="width:44px"></colgroup><thead><tr>';
+  for (const f of fields) {
+    const ind = ui.sort.fid === f.id && f.id !== 'no' ? (ui.sort.dir > 0 ? '▲' : '▼') : (f.id === 'no' && ui.sort.dir < 0 && ui.sort.fid === 'no' ? '▼' : '');
+    const filt = ui.filters[f.id] ? ' filtered' : '';
+    h += `<th data-fid="${esc(f.id)}" class="${f.id === 'no' ? 'c-no' : ''}${filt}"><div class="th-in"><span class="th-name" data-act="sort" data-fid="${esc(f.id)}" title="${esc(f.name)}（クリックで並べ替え）">${esc(f.name)}</span><span class="th-ind">${ind}${filt ? ' ⏷' : ''}</span><button class="th-btn" data-act="colmenu" data-fid="${esc(f.id)}" aria-label="列のメニュー">▾</button></div><span class="resizer" data-fid="${esc(f.id)}"></span></th>`;
+  }
+  h += '<th class="c-add"><button class="th-add" data-act="addfield" data-tip="項目（列）を追加">＋</button></th></tr></thead><tbody>';
+  for (const i of rows) {
+    const rs = ruleStyles(i);
+    h += `<tr data-iid="${i.id}">`;
+    for (const f of fields) {
+      const cls = `t-${f.type}${f.id === 'no' ? ' c-no' : ''}${f.readonly ? ' ro' : ''}`;
+      h += `<td data-iid="${i.id}" data-fid="${esc(f.id)}" class="${cls}" style="${styleCss(cellStyle(rs, f.id))}">${cellHtml(i, f)}</td>`;
+    }
+    h += '<td class="c-add"></td></tr>';
+  }
+  h += '</tbody></table>';
+  if (!activeIssues().length) {
+    h += `<div class="empty"><p>まだ課題がありません。</p><p><button class="btn primary" data-act="new">＋ 最初の課題を登録</button> <button class="btn" data-act="import">Excel・CSVから取り込む</button> <button class="btn ghost" data-act="sample">サンプルを入れてみる</button></p><p class="hint">Excelの表をコピーして、この画面に貼り付ける（Ctrl+V）こともできます。</p></div>`;
+  } else {
+    h = h.replace('</tbody>', `<tr class="add-row"><td colspan="${fields.length + 1}"><button data-act="addrow">＋ 行を追加</button></td></tr></tbody>`);
+    if (!rows.length) h += `<div class="empty"><p>条件に合う課題がありません。</p><button class="btn" data-act="clearAll">絞り込みを解除</button></div>`;
+  }
+  const st = wrap.scrollTop, sl = wrap.scrollLeft;
+  wrap.innerHTML = h;
+  wrap.scrollTop = st; wrap.scrollLeft = sl;
+  applySel(false);
+}
+function cellEl(iid, fid) { return main.querySelector(`td[data-iid="${iid}"][data-fid="${CSS.escape(fid)}"]`); }
+function applySel(scroll = true) {
+  $$('td.sel', main).forEach(td => td.classList.remove('sel'));
+  if (!ui.sel) return;
+  const td = cellEl(ui.sel.iid, ui.sel.fid);
+  if (!td) return;
+  td.classList.add('sel');
+  setTimeout(focusCatcher, 0);
+  if (scroll) {
+    const wrap = $('#tableWrap'); if (!wrap) return;
+    const r = td.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+    const headH = 33, leftW = ui.sel.fid === 'no' ? 0 : ((cellEl(ui.sel.iid, 'no') || { offsetWidth: 0 }).offsetWidth);
+    if (r.top < w.top + headH) wrap.scrollTop -= (w.top + headH - r.top);
+    else if (r.bottom > w.bottom - 14) wrap.scrollTop += r.bottom - w.bottom + 14;
+    if (r.left < w.left + leftW) wrap.scrollLeft -= (w.left + leftW - r.left);
+    else if (r.right > w.right - 14) wrap.scrollLeft += r.right - w.right + 14;
+  }
+}
+function moveSel(dr, dc) {
+  if (!ui.rowIds.length || !ui.colIds.length) return;
+  let r = ui.sel ? ui.rowIds.indexOf(ui.sel.iid) : 0, c = ui.sel ? ui.colIds.indexOf(ui.sel.fid) : 0;
+  if (r < 0) r = 0; if (c < 0) c = 0;
+  r = Math.max(0, Math.min(ui.rowIds.length - 1, r + dr));
+  c = Math.max(0, Math.min(ui.colIds.length - 1, c + dc));
+  ui.sel = { iid: ui.rowIds[r], fid: ui.colIds[c] };
+  applySel();
+}
+
+/* ---------- セル編集 ---------- */
+function rawToInput(f, v) {
+  if (v == null) return '';
+  if (f.type === 'date') return v;
+  return String(v);
+}
+function startEdit(iid, fid, initial) {
+  const f = fieldById(fid), i = issueById(iid);
+  if (!f || !i || f.readonly) return;
+  if (f.type === 'checkbox') { setValues(iid, { [fid]: !getVal(i, f) }); return; }
+  const td = cellEl(iid, fid);
+  if (!td) return;
+  td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (f.type === 'select' || f.type === 'multiselect' || f.type === 'user') return openChoice(td, i, f, initial);
+  const r = td.getBoundingClientRect();
+  const long = f.type === 'longtext';
+  const ed = document.createElement(long ? 'textarea' : 'input');
+  if (!long) ed.type = f.type === 'date' && initial == null ? 'date' : 'text';
+  if (f.type === 'number') ed.inputMode = 'decimal';
+  ed.className = 'cell-editor';
+  Object.assign(ed.style, { left: r.left + 'px', top: r.top + 'px', width: Math.max(r.width, long ? 360 : 140) + 'px', height: (long ? 140 : r.height) + 'px' });
+  ed.value = initial != null ? initial : rawToInput(f, getVal(i, f));
+  document.body.appendChild(ed);
+  ed.focus();
+  if (initial == null && ed.select && ed.type !== 'date') ed.select();
+  ui.editing = { iid, fid, el: ed };
+  ed.addEventListener('keydown', e => editorKey(e, long));
+  ed.addEventListener('blur', () => endEdit(true));
+}
+function editorKey(e, long) {
+  if (e.isComposing || e.keyCode === 229) return;
+  if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'Tab') e.stopPropagation();
+  if (e.key === 'Escape') { e.preventDefault(); endEdit(false); }
+  else if (e.key === 'Enter' && !(long && (e.altKey || e.shiftKey))) { e.preventDefault(); endEdit(true, e.shiftKey ? -1 : 1, 0); }
+  else if (e.key === 'Enter' && long && e.altKey) { e.preventDefault(); const t = e.target; const p = t.selectionStart; t.value = t.value.slice(0, p) + '\n' + t.value.slice(t.selectionEnd); t.selectionStart = t.selectionEnd = p + 1; }
+  else if (e.key === 'Tab') { e.preventDefault(); endEdit(true, 0, e.shiftKey ? -1 : 1); }
+}
+/* 日本語入力の受け口：選択中のセルの上に見えない入力欄を置き、変換が始まったらそのまま編集欄にする */
+const catcher = $('#keyCatcher');
+function resetCatcher() { catcher.value = ''; catcher.className = ''; catcher.removeAttribute('style'); }
+function focusCatcher() {
+  if (ui.view !== 'table' || !ui.sel || ui.editing || openModals.length || activePop) return;
+  const ae = document.activeElement;
+  if (ae && ae !== document.body && ae !== catcher && !main.contains(ae)) return;
+  const td = cellEl(ui.sel.iid, ui.sel.fid);
+  if (td) { const r = td.getBoundingClientRect(); catcher.style.left = r.left + 'px'; catcher.style.top = r.top + 'px'; }
+  if (document.activeElement !== catcher) catcher.focus({ preventScroll: true });
+}
+catcher.addEventListener('compositionstart', () => {
+  if (ui.editing || !ui.sel) return;
+  const f = fieldById(ui.sel.fid), td = cellEl(ui.sel.iid, ui.sel.fid);
+  if (!f || f.readonly || f.type === 'checkbox' || !td) return;
+  const r = td.getBoundingClientRect();
+  catcher.className = 'cell-editor';
+  Object.assign(catcher.style, { left: r.left + 'px', top: r.top + 'px', width: Math.max(r.width, 140) + 'px', height: (f.type === 'longtext' ? 140 : r.height) + 'px' });
+  ui.editing = { iid: ui.sel.iid, fid: ui.sel.fid, el: catcher, catcher: true, long: f.type === 'longtext', choiceAfter: f.type === 'select' || f.type === 'multiselect' || f.type === 'user' };
+});
+catcher.addEventListener('compositionend', () => {
+  const e = ui.editing;
+  if (!e || !e.catcher || !e.choiceAfter) return;
+  const v = catcher.value;
+  ui.editing = null; resetCatcher();
+  const td = cellEl(e.iid, e.fid), i = issueById(e.iid), f = fieldById(e.fid);
+  if (td && i && f) openChoice(td, i, f, v);
+});
+catcher.addEventListener('keydown', e => { if (ui.editing && ui.editing.catcher) editorKey(e, ui.editing.long); });
+catcher.addEventListener('blur', () => { if (ui.editing && ui.editing.catcher) endEdit(true); });
+function endEdit(commit, dr = 0, dc = 0) {
+  const e = ui.editing;
+  if (!e || e.choice) return;
+  ui.editing = null;
+  const val = e.el.value;
+  if (e.catcher) resetCatcher(); else e.el.remove();
+  const f = fieldById(e.fid), i = issueById(e.iid);
+  if (commit && f && i) {
+    mutate(() => {
+      const c = convertInput(f, val, true);
+      if (!c.ok) { toast(`「${val}」は${TYPES[f.type] || ''}として読み取れませんでした`, true); return; }
+      setValuesIn(i, { [f.id]: c.value });
+    });
+  }
+  if (dr || dc) moveSel(dr, dc);
+  focusCatcher();
+  afterEdit();
+}
+function afterEdit() {
+  if (file.pendingRemote && !isDirty()) receiveRemote(file.pendingRemote);
+}
+function openChoice(anchor, i, f, initial) {
+  const multi = f.type === 'multiselect', isUser = f.type === 'user';
+  const orig = getVal(i, f);
+  let selected = multi ? [...(orig || [])] : orig;
+  const pop = openPopover(anchor, `<input class="pop-search" placeholder="${isUser ? '名前を検索・入力' : '検索 または 新しい選択肢を入力'}"><div class="pop-list" role="listbox"></div>${multi ? '<div class="pop-foot"><button class="btn sm primary" data-k="done">決定</button></div>' : ''}`, { minWidth: Math.max(anchor.offsetWidth, 220), onClose: () => finish(true) });
+  const inp = $('.pop-search', pop), list = $('.pop-list', pop);
+  let act = 0, items = [];
+  ui.editing = { iid: i.id, fid: f.id, el: pop, choice: true };
+  inp.value = initial || '';
+  function build() {
+    const q = inp.value.trim().toLowerCase();
+    const base0 = isUser ? knownUsers().map(n => ({ id: n, label: n })) : (f.options || []).map(o => ({ id: o.id, label: o.label, color: o.color }));
+    items = base0.filter(o => !q || o.label.toLowerCase().includes(q));
+    if (q && !base0.some(o => o.label.toLowerCase() === q)) items.push({ add: inp.value.trim() });
+    if (!multi && !q) items.push({ clear: true });
+    act = Math.min(act, items.length - 1); if (act < 0) act = 0;
+    list.innerHTML = items.map((o, n) => {
+      if (o.add) return `<div class="choice add${n === act ? ' act' : ''}" data-n="${n}">＋「${esc(o.add)}」を${isUser ? '入力' : '選択肢に追加'}</div>`;
+      if (o.clear) return `<div class="choice clear${n === act ? ' act' : ''}" data-n="${n}">（空欄にする）</div>`;
+      const on = multi ? selected.includes(o.id) : selected === o.id;
+      return `<div class="choice${n === act ? ' act' : ''}" data-n="${n}"><span class="ck">${on ? '✓' : ''}</span>${o.color ? pill(o) : esc(o.label)}</div>`;
+    }).join('') || '<div class="choice clear">候補がありません</div>';
+    const a = list.querySelector('.act'); if (a) a.scrollIntoView({ block: 'nearest' });
+  }
+  function choose(n) {
+    const o = items[n]; if (!o) return;
+    if (o.clear) { selected = multi ? [] : null; return closePopover(); }
+    let id = o.id;
+    if (o.add) {
+      if (isUser) id = o.add;
+      else { pendingAdd.push(o.add); id = 'new:' + o.add; }
+    }
+    if (multi) { selected = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]; inp.value = ''; build(); inp.focus(); }
+    else { selected = id; closePopover(); }
+  }
+  const pendingAdd = [];
+  function finish(commit) {
+    ui.editing = null;
+    if (commit !== false) {
+      mutate(() => {
+        const fld = fieldById(f.id); const iss = issueById(i.id);
+        if (!fld || !iss) return;
+        const resolve = id => (typeof id === 'string' && id.startsWith('new:') ? (findOption(fld, id.slice(4)) || { id: addOption(fld, id.slice(4)) }).id : id);
+        const v = multi ? selected.map(resolve) : resolve(selected);
+        setValuesIn(iss, { [f.id]: v });
+      });
+    }
+    focusCatcher();
+    afterEdit();
+  }
+  pop.addEventListener('mousedown', e => { if (e.target.closest('.choice')) e.preventDefault(); });
+  list.addEventListener('click', e => { const c = e.target.closest('.choice[data-n]'); if (c) choose(+c.dataset.n); });
+  pop.addEventListener('click', e => { if (e.target.dataset.k === 'done') closePopover(); });
+  inp.addEventListener('input', () => { act = 0; build(); });
+  inp.addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'Tab') e.stopPropagation();
+    if (e.key === 'ArrowDown') { e.preventDefault(); act = Math.min(items.length - 1, act + 1); build(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); act = Math.max(0, act - 1); build(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (multi && e.ctrlKey) return closePopover(); choose(act); if (!multi) moveSel(1, 0); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!multi) { selected = orig; } closePopover(); }
+    else if (e.key === 'Tab') { e.preventDefault(); closePopover(); moveSel(0, e.shiftKey ? -1 : 1); }
+  });
+  build();
+  inp.focus();
+}
+
+/* ---------- コピー・貼り付け ---------- */
+function pasteGrid(text) {
+  const rows = parseDelimited(text, text.includes('\t') ? '\t' : ',');
+  if (!rows.length) return;
+  if (!activeIssues().length || !ui.sel) {
+    // 空の表への貼り付けは取り込み画面へ
+    return openImport(text);
+  }
+  let r0 = ui.rowIds.indexOf(ui.sel.iid), c0 = ui.colIds.indexOf(ui.sel.fid);
+  if (r0 < 0 || c0 < 0) return;
+  let bad = 0, created = 0;
+  mutate(() => {
+    rows.forEach((cells, dr) => {
+      let iid = ui.rowIds[r0 + dr];
+      let iss = iid ? issueById(iid) : null;
+      if (!iss) { iss = newIssue({}); created++; }
+      const patch = {};
+      cells.forEach((cell, dc) => {
+        const f = fieldById(ui.colIds[c0 + dc]);
+        if (!f || f.readonly) return;
+        const c = convertInput(f, cell, true);
+        if (c.ok) patch[f.id] = c.value; else bad++;
+      });
+      setValuesIn(iss, patch);
+    });
+  });
+  toast(`${rows.length}行を貼り付けました${created ? `（新しい課題 ${created}件）` : ''}${bad ? `・読み取れなかったセル ${bad}個` : ''}`, bad > 0);
+}
+
+/* ---------- カンバン ---------- */
+function kanbanField() { const f = fieldById(doc.settings.kanbanField); return f && (f.type === 'select' || f.type === 'user') ? f : statusField(); }
+function renderKanban() {
+  const f = kanbanField();
+  const list = filteredIssues();
+  const cl = $('#countLbl'); if (cl) cl.textContent = `${list.length} / ${activeIssues().length}件`;
+  if (!f) { main.innerHTML = '<div class="empty">カンバンにするには「選択肢」か「人」の項目が必要です。</div>'; return; }
+  let cols;
+  if (f.type === 'select') cols = (f.options || []).map(o => ({ key: o.id, label: o.label, color: o.color }));
+  else { const s = new Set(list.map(i => i.values[f.id]).filter(Boolean)); cols = Array.from(s).sort((a, b) => a.localeCompare(b, 'ja')).map(n => ({ key: n, label: n, color: '#8a8984' })); }
+  const groups = new Map(cols.map(c => [c.key, []])); groups.set('', []);
+  for (const i of list) { const v = i.values[f.id]; (groups.has(v) ? groups.get(v) : groups.get('')).push(i); }
+  if (groups.get('').length || f.type === 'user') cols.push({ key: '', label: '未設定', color: '#cfcdc6' });
+  const cardFields = (doc.settings.cardFields || []).map(fieldById).filter(x => x && x.id !== f.id);
+  let h = '<div class="kanban">';
+  for (const c of cols) {
+    const items = groups.get(c.key) || [];
+    h += `<section class="kcol"><header><span class="kdot" style="--c:${esc(c.color)}"></span>${esc(c.label)}<span class="kcount">${items.length}</span></header><div class="kcards" data-key="${esc(c.key)}">`;
+    for (const i of items) {
+      const rs = ruleStyles(i);
+      const meta = cardFields.map(cf => {
+        const v = getVal(i, cf); if (isEmpty(v)) return '';
+        const st = styleCss(rs.cells[cf.id]);
+        if (cf.type === 'select') { const o = optById(cf, v); return o ? `<span style="${st}">${pill(o)}</span>` : ''; }
+        if (cf.type === 'multiselect') return `<span style="${st}">${v.map(id => optById(cf, id)).filter(Boolean).map(pill).join(' ')}</span>`;
+        return `<span style="${st}"><span class="lbl">${esc(cf.name)}</span>${esc(fmt(cf, v))}</span>`;
+      }).join('');
+      h += `<article class="kcard" draggable="true" data-iid="${i.id}" style="${styleCss(rs.row)}"><div class="kc-no">#${i.no}</div><div class="kc-title" style="${styleCss(rs.cells.title)}">${esc(i.values.title || '（件名なし）')}</div>${meta ? `<div class="kc-meta">${meta}</div>` : ''}</article>`;
+    }
+    h += `</div><button class="kadd" data-act="kadd" data-key="${esc(c.key)}">＋ 追加</button></section>`;
+  }
+  h += '</div>';
+  main.innerHTML = h;
+}
+
+/* ---------- ダッシュボード ---------- */
+function renderDash() {
+  const all = activeIssues(), open = all.filter(isOpen);
+  const dueF = fieldById(doc.settings.dueField);
+  const overdue = dueF ? open.filter(isOverdue) : [], soon = dueF ? open.filter(isDueSoon) : [];
+  const tile = (q, label, n, sub, tone) => `<button class="tile ${tone || ''}" data-quick-go="${q}"><div class="t-label">${tone ? `<span class="sicon ${tone}">!</span>` : ''}${label}</div><div class="t-num">${n}</div><div class="t-sub">${sub}</div></button>`;
+  let h = '<div class="dash"><div class="tiles">';
+  h += tile('open', '未完了', open.length, `全${all.length}件中`);
+  if (dueF) {
+    h += tile('overdue', '期限切れ', overdue.length, '未完了で期限を過ぎた課題', overdue.length ? 'critical' : '');
+    h += tile('soon', '7日以内に期限', soon.length, '未完了で今日〜7日後が期限', soon.length ? 'warning' : '');
+  }
+  h += tile('closed', '完了', all.length - open.length, all.length ? `完了率 ${Math.round((all.length - open.length) / all.length * 100)}%` : '—');
+  h += '</div><div class="cards2">';
+
+  // ステータス別
+  const sf = statusField();
+  if (sf) {
+    const counts = (sf.options || []).map(o => ({ o, n: all.filter(i => i.values.status === o.id).length }));
+    const none = all.filter(i => !optById(sf, i.values.status)).length;
+    if (none) counts.push({ o: { label: '未設定', color: '#cfcdc6' }, n: none });
+    const max = Math.max(1, ...counts.map(c => c.n));
+    h += `<section class="card"><h3>ステータス別</h3><div class="bars">` + counts.map(c => `<div class="bar-row" data-tip="${esc(c.o.label)}: ${c.n}件（${all.length ? Math.round(c.n / all.length * 100) : 0}%）"><span class="bar-label">${esc(c.o.label)}</span><div class="bar-track"><div class="bar-seg" style="width:${c.n / max * 100}%;background:${esc(c.o.color)};border-radius:0 4px 4px 0;${c.n ? '' : 'min-width:0'}"></div></div><span class="bar-val">${c.n}</span></div>`).join('') + '</div></section>';
+  }
+
+  // 項目ごとの未完了の内訳
+  const groupable = activeFields().filter(f => (f.type === 'select' || f.type === 'user') && f.id !== 'status' && !SYS_PROP[f.id]);
+  const gf = fieldById(doc.settings.groupField) && groupable.find(f => f.id === doc.settings.groupField) ? fieldById(doc.settings.groupField) : groupable[0];
+  if (gf && sf) {
+    const openOpts = (sf.options || []).filter(o => !o.done);
+    const keyOf = i => { const v = i.values[gf.id]; if (gf.type === 'select') { const o = optById(gf, v); return o ? o.label : '未設定'; } return v || '未設定'; };
+    const g = new Map();
+    for (const i of open) { const k = keyOf(i); if (!g.has(k)) g.set(k, []); g.get(k).push(i); }
+    let rows = Array.from(g.entries()).sort((a, b) => b[1].length - a[1].length);
+    const max = Math.max(1, ...rows.map(r => r[1].length));
+    const sel = `<select class="sel" id="groupField">${groupable.map(f => `<option value="${esc(f.id)}"${f.id === gf.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select>`;
+    h += `<section class="card"><h3>${sel} ごとの未完了</h3>`;
+    if (!rows.length) h += '<p class="muted">未完了の課題はありません。</p>';
+    else {
+      if (openOpts.length > 1) h += '<div class="legend">' + openOpts.map(o => `<span><i style="--c:${esc(o.color)}"></i>${esc(o.label)}</span>`).join('') + '</div>';
+      h += '<div class="bars">' + rows.slice(0, 12).map(([k, items]) => {
+        const segs = openOpts.map(o => ({ o, n: items.filter(i => i.values.status === o.id).length })).filter(s => s.n);
+        const other = items.length - segs.reduce((a, s) => a + s.n, 0);
+        if (other) segs.push({ o: { label: '未設定', color: '#cfcdc6' }, n: other });
+        return `<div class="bar-row"><span class="bar-label" title="${esc(k)}">${esc(k)}</span><div class="bar-track" style="width:${items.length / max * 100}%">${segs.map(s => `<div class="bar-seg" data-tip="${esc(k)} ・ ${esc(s.o.label)}: ${s.n}件" style="flex:${s.n};background:${esc(s.o.color)}"></div>`).join('')}</div><span class="bar-val">${items.length}</span></div>`;
+      }).join('') + '</div>';
+      if (rows.length > 12) h += `<p class="hint">ほか ${rows.length - 12} 件のグループ</p>`;
+    }
+    h += '</section>';
+  }
+
+  // 期限が近い・過ぎた
+  if (dueF) {
+    const lim = addDays(today(), 7);
+    const near = open.filter(i => { const d = dueOf(i); return d && d <= lim; }).sort((a, b) => dueOf(a).localeCompare(dueOf(b)));
+    h += `<section class="card"><h3>期限が近い・過ぎた課題</h3>`;
+    h += near.length ? '<div class="list">' + near.slice(0, 10).map(i => { const d = dueOf(i); const cls = d < today() ? 'due-over' : 'due-soon'; return `<button class="list-row" data-act="open" data-iid="${i.id}"><span class="${cls}">${d < today() ? '⚠ ' : ''}${d.slice(5).replace('-', '/')}</span><span class="muted">#${i.no}</span><span class="ttl">${esc(i.values.title || '（件名なし）')}</span><span class="muted">${esc(assigneeOf(i))}</span></button>`; }).join('') + '</div>' + (near.length > 10 ? `<p class="hint">ほか ${near.length - 10} 件</p>` : '') : '<p class="muted">7日以内に期限の課題はありません。</p>';
+    h += '</section>';
+  }
+
+  // 最近の更新
+  const recent = all.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 8);
+  h += `<section class="card"><h3>最近更新された課題</h3>`;
+  h += recent.length ? '<div class="list">' + recent.map(i => `<button class="list-row" data-act="open" data-iid="${i.id}"><span class="muted">${relTime(i.updatedAt)}</span><span class="muted">#${i.no}</span><span class="ttl">${esc(i.values.title || '（件名なし）')}</span><span class="muted">${esc(i.updatedBy || '')}</span></button>`).join('') + '</div>' : '<p class="muted">まだ課題がありません。</p>';
+  h += '</section></div></div>';
+  main.innerHTML = h;
+}
+
+/* ============================================================
+   ポップオーバー・モーダル・通知
+   ============================================================ */
+let activePop = null;
+function openPopover(anchor, html, { minWidth, onClose, align } = {}) {
+  closePopover();
+  const p = document.createElement('div');
+  p.className = 'pop'; p.innerHTML = html;
+  if (minWidth) p.style.minWidth = minWidth + 'px';
+  document.body.appendChild(p);
+  const r = anchor.getBoundingClientRect();
+  const pw = p.offsetWidth, ph = p.offsetHeight;
+  let left = align === 'right' ? r.right - pw : r.left;
+  left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+  let top = r.bottom + 4;
+  if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 4);
+  p.style.left = left + 'px'; p.style.top = top + 'px';
+  p._onClose = onClose;
+  activePop = p;
+  return p;
+}
+function closePopover() {
+  const p = activePop;
+  if (!p) return;
+  activePop = null;
+  p.remove();
+  if (p._onClose) p._onClose();
+}
+document.addEventListener('mousedown', e => { if (activePop && !activePop.contains(e.target)) closePopover(); }, true);
+
+const openModals = [];
+function openModal({ title, body, foot, wide, closable = true, onClose }) {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true"><div class="modal-h"><h2>${esc(title)}</h2>${closable ? '<button class="modal-x" data-close aria-label="閉じる">×</button>' : ''}</div><div class="modal-b">${body}</div>${foot ? `<div class="modal-f">${foot}</div>` : ''}</div>`;
+  document.body.appendChild(ov);
+  const m = ov.firstElementChild;
+  m._ov = ov; m._onClose = onClose; m._closable = closable;
+  openModals.push(m);
+  ov.addEventListener('mousedown', e => { if (e.target === ov && closable) ov._down = true; });
+  ov.addEventListener('click', e => { if (e.target === ov && ov._down && closable) closeModal(m); ov._down = false; });
+  m.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeModal(m); });
+  setTimeout(() => { const f = m.querySelector('[autofocus]') || m.querySelector('.modal-b input:not([type=checkbox]):not([type=radio]),.modal-b textarea,.modal-b select'); if (f) f.focus(); }, 0);
+  return m;
+}
+function closeModal(m) {
+  const k = openModals.indexOf(m);
+  if (k >= 0) openModals.splice(k, 1);
+  m._ov.remove();
+  if (m._onClose) m._onClose();
+  if (!openModals.length && file.pendingRemote && !isDirty()) receiveRemote(file.pendingRemote);
+}
+function alertModal(title, text) {
+  const m = openModal({ title, body: `<p style="margin:0;white-space:pre-wrap">${esc(text)}</p>`, foot: '<button class="btn primary" data-close autofocus>OK</button>' });
+  setTimeout(() => $('[data-close].btn', m) && $('[data-close].btn', m).focus(), 0);
+}
+function confirmModal(title, text, okLabel = 'OK', altLabel) {
+  return new Promise(res => {
+    let done = false;
+    const m = openModal({
+      title, body: `<p style="margin:0;white-space:pre-wrap">${esc(text)}</p>`,
+      foot: `<button class="btn" data-close>キャンセル</button>${altLabel ? `<button class="btn" data-k="alt">${esc(altLabel)}</button>` : ''}<button class="btn primary" data-k="ok">${esc(okLabel)}</button>`,
+      onClose: () => { if (!done) res(altLabel ? null : false); },
+    });
+    m.addEventListener('click', e => {
+      const k = e.target.dataset.k;
+      if (k === 'ok' || k === 'alt') { done = true; closeModal(m); res(k === 'ok' ? true : false); }
+    });
+    setTimeout(() => $('[data-k=ok]', m).focus(), 0);
+  });
+}
+function toast(msg, err) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), err ? 6000 : 3200);
+}
+const tip = $('#tip');
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (!el || !el.dataset.tip) { tip.style.display = 'none'; return; }
+  tip.textContent = el.dataset.tip; tip.style.display = 'block';
+});
+document.addEventListener('mousemove', e => {
+  if (tip.style.display !== 'block') return;
+  const x = Math.min(e.clientX + 12, window.innerWidth - tip.offsetWidth - 8);
+  const y = e.clientY + 16 + tip.offsetHeight > window.innerHeight ? e.clientY - tip.offsetHeight - 8 : e.clientY + 16;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+document.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+
+/* ============================================================
+   課題の入力フォーム
+   ============================================================ */
+function inputHtml(f, v, name) {
+  const n = `name="${esc(name)}"`;
+  switch (f.type) {
+    case 'longtext': return `<textarea class="inp" ${n}>${esc(v || '')}</textarea>`;
+    case 'number': return `<input class="inp" ${n} inputmode="decimal" value="${esc(v == null ? '' : v)}" style="max-width:200px">`;
+    case 'date': return `<input class="inp" type="date" ${n} value="${esc(v || '')}" style="max-width:200px">`;
+    case 'checkbox': return `<label style="display:flex;gap:6px;align-items:center;padding-top:5px"><input type="checkbox" ${n}${v ? ' checked' : ''}> はい</label>`;
+    case 'select': return `<select class="sel" ${n}><option value="">（空欄）</option>${(f.options || []).map(o => `<option value="${esc(o.id)}"${o.id === v ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}<option value="__new">＋ 新しい選択肢…</option></select>`;
+    case 'multiselect': return `<div class="ms" data-name="${esc(name)}">${(f.options || []).map(o => `<label><input type="checkbox" value="${esc(o.id)}"${(v || []).includes(o.id) ? ' checked' : ''}>${pill(o)}</label>`).join('')}<button type="button" class="btn sm ghost" data-k="msadd" data-fid="${esc(f.id)}">＋ 追加</button></div>`;
+    case 'user': return `<input class="inp" ${n} list="dl-users" value="${esc(v || '')}" style="max-width:240px" autocomplete="off">`;
+    default: return `<input class="inp" ${n} value="${esc(v == null ? '' : v)}">`;
+  }
+}
+function openForm(iid, preset = {}) {
+  const editing = iid ? issueById(iid) : null;
+  const fields = activeFields().filter(f => !f.readonly);
+  const vals = editing ? clone(editing.values) : Object.assign({}, preset);
+  if (!editing && vals.status == null) { const st = statusField(); if (st && st.options[0]) vals.status = st.options[0].id; }
+  const added = {};  // フォーム内で追加した選択肢 {fid: [label]}
+  let body = `<datalist id="dl-users">${knownUsers().map(n => `<option value="${esc(n)}">`).join('')}</datalist><form class="frm" id="issueForm" onsubmit="return false">`;
+  for (const f of fields) body += `<label class="${f.id === 'title' ? 'req' : ''}">${esc(f.name)}</label><div>${inputHtml(f, vals[f.id], 'f_' + f.id)}</div>`;
+  if (editing) body += `<label>記録</label><div class="ro-val">#${editing.no} ・ 作成 ${esc(fmtDateTime(editing.createdAt))} ${esc(editing.createdBy || '')} ・ 更新 ${esc(fmtDateTime(editing.updatedAt))} ${esc(editing.updatedBy || '')}</div>`;
+  body += '</form>';
+  const foot = `${editing ? '<div class="left"><button class="btn danger" data-k="del">削除</button></div>' : ''}<button class="btn" data-close>キャンセル</button>${editing ? '' : '<button class="btn" data-k="next" data-tip="保存して、続けて次の課題を入力">保存して次へ</button>'}<button class="btn primary" data-k="ok" data-tip="Ctrl+Enter">保存</button>`;
+  const m = openModal({ title: editing ? `#${editing.no} を編集` : '新しい課題', body, foot, wide: true });
+  const form = $('#issueForm', m);
+  setTimeout(() => { const t = form.querySelector('[name=f_title]'); if (t) t.focus(); }, 0);
+  form.addEventListener('change', e => {
+    if (e.target.tagName === 'SELECT' && e.target.value === '__new') {
+      const fid = e.target.name.slice(2);
+      const label = (prompt('新しい選択肢の名前') || '').trim();
+      if (!label) { e.target.value = ''; return; }
+      (added[fid] = added[fid] || []).push(label);
+      const o = document.createElement('option'); o.value = 'new:' + label; o.textContent = label;
+      e.target.insertBefore(o, e.target.lastElementChild); e.target.value = o.value;
+    }
+  });
+  form.addEventListener('click', e => {
+    if (e.target.dataset.k === 'msadd') {
+      const fid = e.target.dataset.fid;
+      const label = (prompt('新しい選択肢の名前') || '').trim();
+      if (!label) return;
+      (added[fid] = added[fid] || []).push(label);
+      const lb = document.createElement('label'); lb.innerHTML = `<input type="checkbox" value="new:${esc(label)}" checked>${pill({ label, color: PALETTE[((fieldById(fid).options || []).length + added[fid].length - 1) % PALETTE.length] })}`;
+      e.target.before(lb);
+    }
+  });
+  function collect() {
+    const out = {};
+    for (const f of fields) {
+      if (f.type === 'multiselect') { out[f.id] = $$(`.ms[data-name="f_${CSS.escape(f.id)}"] input:checked`, form).map(x => x.value); continue; }
+      const el = form.querySelector(`[name="f_${CSS.escape(f.id)}"]`);
+      if (!el) continue;
+      out[f.id] = f.type === 'checkbox' ? el.checked : el.value;
+    }
+    return out;
+  }
+  function submit(next) {
+    const raw = collect();
+    if (!String(raw.title || '').trim()) { toast('件名を入力してください', true); form.querySelector('[name=f_title]').focus(); return; }
+    let bad = [];
+    let newNo = null;
+    mutate(() => {
+      const patch = {};
+      for (const f of fields) {
+        let v = raw[f.id];
+        const fld = fieldById(f.id);
+        const res = id => (typeof id === 'string' && id.startsWith('new:') ? (findOption(fld, id.slice(4)) || { id: addOption(fld, id.slice(4)) }).id : id);
+        if (f.type === 'select') { patch[f.id] = v ? res(v) : null; continue; }
+        if (f.type === 'multiselect') { patch[f.id] = v.map(res); continue; }
+        if (f.type === 'checkbox') { patch[f.id] = v; continue; }
+        const c = convertInput(fld, v, false);
+        if (c.ok) patch[f.id] = c.value; else bad.push(f.name);
+      }
+      if (editing) { const iss = issueById(editing.id); if (iss) setValuesIn(iss, patch); }
+      else newNo = newIssue(patch).no;
+    });
+    if (bad.length) toast(`読み取れなかった項目: ${bad.join('、')}`, true);
+    closeModal(m);
+    if (next) openForm(null, preset);
+    if (newNo) toast(`#${newNo} を登録しました`);
+  }
+  m.addEventListener('click', async e => {
+    const k = e.target.dataset.k;
+    if (k === 'ok') submit(false);
+    if (k === 'next') submit(true);
+    if (k === 'del' && await confirmModal('課題を削除', `#${editing.no}「${editing.values.title || ''}」を削除しますか？`, '削除する')) {
+      mutate(() => { const iss = issueById(editing.id); if (iss) { iss.deleted = true; touch(iss); } });
+      closeModal(m);
+    }
+  });
+  m.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(false); } });
+}
+
+/* ============================================================
+   項目の管理
+   ============================================================ */
+function openFields() {
+  const m = openModal({ title: '項目の管理', wide: true, body: '<div id="fl"></div>', foot: '<div class="left"><button class="btn" data-k="add">＋ 項目を追加</button></div><button class="btn primary" data-close>閉じる</button>' });
+  function draw() {
+    const fs = activeFields();
+    $('#fl', m).innerHTML = `<p class="hint" style="margin-top:0">項目は自由に追加・名前変更・並べ替えできます。「ID」「件名」「ステータス」と記録用の項目は削除できません。</p><div class="flist">` + fs.map((f, n) => `<div class="frow"><label style="display:flex" data-tip="一覧に表示する"><input type="checkbox" data-k="vis" data-fid="${esc(f.id)}"${f.hidden ? '' : ' checked'}></label><span class="nm">${esc(f.name)}${f.system ? '<span class="tag">固定</span>' : ''}</span><span class="tp">${esc(f.type === 'no' ? '自動の番号' : f.type === 'datetime' ? '日時（自動）' : TYPES[f.type])}</span><button class="iconbtn" data-k="up" data-fid="${esc(f.id)}"${n === 0 ? ' disabled' : ''} aria-label="上へ">↑</button><button class="iconbtn" data-k="down" data-fid="${esc(f.id)}"${n === fs.length - 1 ? ' disabled' : ''} aria-label="下へ">↓</button><button class="btn sm" data-k="edit" data-fid="${esc(f.id)}"${f.readonly ? ' disabled' : ''}>編集</button><button class="btn sm danger" data-k="del" data-fid="${esc(f.id)}"${f.system ? ' disabled' : ''}>削除</button></div>`).join('') + '</div>';
+  }
+  draw();
+  m.addEventListener('click', async e => {
+    const k = e.target.dataset.k, fid = e.target.dataset.fid;
+    if (k === 'add') openFieldEditor(null, draw);
+    if (k === 'edit') openFieldEditor(fid, draw);
+    if (k === 'up' || k === 'down') { moveField(fid, k === 'up' ? -1 : 1); draw(); }
+    if (k === 'del') { const f = fieldById(fid); if (await confirmModal('項目を削除', `項目「${f.name}」を削除しますか？\nこの項目に入力された内容は表示されなくなります。`, '削除する')) { deleteField(fid); draw(); } }
+  });
+  m.addEventListener('change', e => { if (e.target.dataset.k === 'vis') mutate(() => { fieldById(e.target.dataset.fid).hidden = !e.target.checked; }); });
+}
+function moveField(fid, d, list) {
+  mutate(() => {
+    const fs = activeFields();
+    const seq = list || fs;
+    const n = seq.findIndex(f => f.id === fid), t = n + d;
+    if (n < 0 || t < 0 || t >= seq.length) return;
+    const a = fs.indexOf(seq[n]), b = fs.indexOf(seq[t]);
+    [fs[a], fs[b]] = [fs[b], fs[a]];
+    fs.forEach((f, k) => { if (f.order !== k) f.order = k; });
+  });
+}
+// 新しい項目は、記録用の項目（作成日時など）の手前に入れる
+function insertField(nf) {
+  const fs = activeFields();
+  let at = fs.findIndex(f => f.readonly && f.id !== 'no');
+  if (at < 0) at = fs.length;
+  fs.splice(at, 0, nf);
+  doc.fields.push(nf);
+  fs.forEach((f, k) => { if (f.order !== k) f.order = k; });
+}
+function deleteField(fid) {
+  mutate(() => {
+    const f = fieldById(fid); if (!f || f.system) return;
+    f.deleted = true;
+    delete ui.filters[fid];
+    for (const k of ['kanbanField', 'dueField', 'assigneeField', 'groupField']) if (doc.settings[k] === fid) doc.settings[k] = k === 'kanbanField' ? 'status' : '';
+    doc.settings.cardFields = (doc.settings.cardFields || []).filter(x => x !== fid);
+  });
+}
+function openFieldEditor(fid, after) {
+  const f = fid ? fieldById(fid) : null;
+  const hasValues = f && activeIssues().some(i => !isEmpty(i.values[f.id]));
+  const typeLocked = f && (f.system || hasValues);
+  let opts = clone(f && f.options ? f.options : []);
+  let type = f ? f.type : 'text';
+  const body = `<div class="frm">
+    <label class="req">項目名</label><div><input class="inp" id="fe-name" value="${esc(f ? f.name : '')}" placeholder="例: 対応内容、カテゴリ、顧客名"></div>
+    <label>種類</label><div><select class="sel" id="fe-type"${typeLocked ? ' disabled' : ''}>${Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${k === type ? ' selected' : ''}>${v}</option>`).join('')}</select>${typeLocked ? `<div class="hint">${f.system ? '固定の項目は種類を変えられません。' : '入力済みの値があるため種類は変えられません。'}</div>` : ''}</div>
+    <label class="opt-lbl">選択肢</label><div class="opt-box"><div id="fe-opts"></div><button class="btn sm" data-k="addopt">＋ 選択肢を追加</button>${f && f.id === 'status' ? '<div class="hint">「完了扱い」にした選択肢は、ダッシュボードや「未完了」の絞り込みで完了として数えます。</div>' : ''}</div>
+  </div>`;
+  const m = openModal({ title: f ? `項目「${f.name}」の設定` : '項目を追加', body, foot: '<button class="btn" data-close>キャンセル</button><button class="btn primary" data-k="ok">保存</button>' });
+  function drawOpts() {
+    const show = type === 'select' || type === 'multiselect';
+    $('.opt-lbl', m).style.display = $('.opt-box', m).style.display = show ? '' : 'none';
+    $('#fe-opts', m).innerHTML = opts.map((o, n) => `<div class="opt-row" data-n="${n}"><button class="swatch" style="--c:${esc(o.color)}" data-k="color" data-n="${n}" aria-label="色を選ぶ"></button><input class="inp" data-k="label" data-n="${n}" value="${esc(o.label)}" placeholder="選択肢の名前">${type === 'select' ? `<label class="hint" style="margin:0;white-space:nowrap"><input type="checkbox" data-k="done" data-n="${n}"${o.done ? ' checked' : ''}> 完了扱い</label>` : ''}<button class="iconbtn" data-k="oup" data-n="${n}"${n === 0 ? ' disabled' : ''}>↑</button><button class="iconbtn" data-k="odown" data-n="${n}"${n === opts.length - 1 ? ' disabled' : ''}>↓</button><button class="iconbtn" data-k="odel" data-n="${n}" aria-label="削除">×</button></div>`).join('');
+  }
+  drawOpts();
+  $('#fe-type', m).addEventListener('change', e => { type = e.target.value; if ((type === 'select' || type === 'multiselect') && !opts.length) opts = [{ id: uid(), label: '', color: PALETTE[0] }]; drawOpts(); });
+  m.addEventListener('input', e => { if (e.target.dataset.k === 'label') opts[+e.target.dataset.n].label = e.target.value; });
+  m.addEventListener('change', e => { if (e.target.dataset.k === 'done') opts[+e.target.dataset.n].done = e.target.checked || undefined; });
+  m.addEventListener('click', e => {
+    const k = e.target.dataset.k, n = +e.target.dataset.n;
+    if (k === 'addopt') { opts.push({ id: uid(), label: '', color: PALETTE[opts.length % PALETTE.length] }); drawOpts(); const ins = $$('#fe-opts input[data-k=label]', m); ins[ins.length - 1].focus(); }
+    if (k === 'odel') { opts.splice(n, 1); drawOpts(); }
+    if (k === 'oup' || k === 'odown') { const t = n + (k === 'oup' ? -1 : 1); [opts[n], opts[t]] = [opts[t], opts[n]]; drawOpts(); }
+    if (k === 'color') {
+      const p = openPopover(e.target, `<div class="swatches" style="padding:4px;max-width:200px">${PALETTE.concat(['#1d1d1b']).map(c => `<button class="swatch${opts[n].color === c ? ' on' : ''}" style="--c:${c}" data-c="${c}"></button>`).join('')}<input type="color" value="${esc(opts[n].color)}" style="width:28px;height:24px;border:none;padding:0;background:none" aria-label="色を指定"></div>`);
+      p.addEventListener('click', ev => { if (ev.target.dataset.c) { opts[n].color = ev.target.dataset.c; closePopover(); drawOpts(); } });
+      p.querySelector('input[type=color]').addEventListener('change', ev => { opts[n].color = ev.target.value; closePopover(); drawOpts(); });
+    }
+    if (k === 'ok') {
+      const name = $('#fe-name', m).value.trim();
+      if (!name) return toast('項目名を入力してください', true);
+      const cleaned = opts.filter(o => o.label.trim()).map(o => Object.assign({}, o, { label: o.label.trim() }));
+      if ((type === 'select' || type === 'multiselect') && !cleaned.length) return toast('選択肢を1つ以上入力してください', true);
+      for (const o of cleaned) if (!o.done) delete o.done;
+      mutate(() => {
+        if (f) {
+          const t = fieldById(f.id);
+          t.name = name;
+          if (!typeLocked) t.type = type;
+          if (t.type === 'select' || t.type === 'multiselect') t.options = cleaned; else delete t.options;
+        } else {
+          const nf = { id: 'f' + uid().slice(0, 8), name, type, order: 0, width: type === 'longtext' ? 240 : type === 'checkbox' ? 80 : 130 };
+          if (type === 'select' || type === 'multiselect') nf.options = cleaned;
+          insertField(nf);
+        }
+      });
+      closeModal(m);
+      if (after) after();
+    }
+  });
+}
+
+/* ============================================================
+   色分けルール
+   ============================================================ */
+function openRules() {
+  const m = openModal({ title: '色分けルール', wide: true, body: '<div id="rl"></div>', foot: '<div class="left"><button class="btn" data-k="add">＋ ルールを追加</button></div><button class="btn primary" data-close>閉じる</button>' });
+  function draw() {
+    const rs = activeRules();
+    $('#rl', m).innerHTML = `<p class="hint" style="margin-top:0">条件に合う課題の行やセルに色を付けます。一覧とカンバンの両方に反映されます。重なったときは<b>上にあるルールが優先</b>されます。</p>` +
+      (rs.length ? '<div class="flist">' + rs.map((r, n) => {
+        const cnt = activeIssues().filter(i => ruleMatches(r, i)).length;
+        const tgt = r.target === 'row' || !r.target ? '行全体' : `「${(fieldById(r.target) || { name: '?' }).name}」の列`;
+        return `<div class="frow rule-row"><input type="checkbox" data-k="en" data-rid="${r.id}"${r.enabled ? ' checked' : ''} aria-label="有効"><span class="pv" style="${styleCss(r.style)}">${esc(r.name || '（名前なし）')}</span><div style="flex:1;min-width:0"><div class="sum">${esc((r.conditions || []).map(condSummary).join(r.match === 'any' ? ' または ' : ' かつ '))}</div><div class="sum">${tgt} ・ 該当 ${cnt}件</div></div><button class="iconbtn" data-k="up" data-rid="${r.id}"${n === 0 ? ' disabled' : ''}>↑</button><button class="iconbtn" data-k="down" data-rid="${r.id}"${n === rs.length - 1 ? ' disabled' : ''}>↓</button><button class="btn sm" data-k="edit" data-rid="${r.id}">編集</button><button class="btn sm danger" data-k="del" data-rid="${r.id}">削除</button></div>`;
+      }).join('') + '</div>' : '<p class="muted">ルールはまだありません。</p>');
+  }
+  draw();
+  m.addEventListener('click', async e => {
+    const k = e.target.dataset.k, rid = e.target.dataset.rid;
+    if (k === 'add') openRuleEditor(null, draw);
+    if (k === 'edit') openRuleEditor(rid, draw);
+    if (k === 'del') { const r = doc.rules.find(x => x.id === rid); if (await confirmModal('ルールを削除', `ルール「${r.name}」を削除しますか？`, '削除する')) { mutate(() => { r.deleted = true; }); draw(); } }
+    if (k === 'up' || k === 'down') {
+      mutate(() => {
+        const rs = activeRules(); const n = rs.findIndex(r => r.id === rid), t = n + (k === 'up' ? -1 : 1);
+        if (t < 0 || t >= rs.length) return;
+        [rs[n], rs[t]] = [rs[t], rs[n]];
+        rs.forEach((r, x) => { if (r.order !== x) r.order = x; });
+      });
+      draw();
+    }
+  });
+  m.addEventListener('change', e => { if (e.target.dataset.k === 'en') { mutate(() => { doc.rules.find(x => x.id === e.target.dataset.rid).enabled = e.target.checked; }); draw(); } });
+}
+function condValue(c, raw) {
+  const op = opsFor(fieldById(c.fieldId)).find(o => o[0] === c.op);
+  const kind = op ? op[2] : '';
+  return kind === 'n' || kind === 'd' ? Number(toHalf(raw)) : raw;
+}
+function openRuleEditor(rid, after) {
+  const orig = rid ? doc.rules.find(r => r.id === rid) : null;
+  const r = orig ? clone(orig) : { id: 'r' + uid().slice(0, 8), name: '', enabled: true, match: 'all', target: 'row', conditions: [{ fieldId: doc.settings.dueField && fieldById(doc.settings.dueField) ? doc.settings.dueField : 'status', op: '' }], style: { bg: RULE_BG[0] } };
+  r.style = r.style || {};
+  const fields = activeFields();
+  const body = `<div class="frm">
+    <label class="req">ルール名</label><div><input class="inp" id="re-name" value="${esc(r.name)}" placeholder="例: 期限切れ、優先度が高い"></div>
+    <label>条件</label><div><div style="margin-bottom:8px"><select class="sel" id="re-match"><option value="all"${r.match !== 'any' ? ' selected' : ''}>次の条件をすべて満たす</option><option value="any"${r.match === 'any' ? ' selected' : ''}>次の条件のいずれかを満たす</option></select></div><div id="re-conds"></div><button class="btn sm" data-k="addc">＋ 条件を追加</button></div>
+    <label>色を付ける場所</label><div><select class="sel" id="re-target"><option value="row">行全体（カンバンではカード全体）</option>${fields.map(f => `<option value="${esc(f.id)}"${r.target === f.id ? ' selected' : ''}>「${esc(f.name)}」の列だけ</option>`).join('')}</select></div>
+    <label>背景色</label><div class="swatches" id="re-bg"></div>
+    <label>文字色</label><div class="swatches" id="re-fg"></div>
+    <label>文字の書式</label><div style="display:flex;gap:16px;padding-top:4px"><label><input type="checkbox" id="re-bold"${r.style.bold ? ' checked' : ''}> 太字</label><label><input type="checkbox" id="re-strike"${r.style.strike ? ' checked' : ''}> 取り消し線</label></div>
+    <label>見本</label><div><span class="preview" id="re-pv">見本のテキスト</span> <span class="hint" id="re-cnt"></span></div>
+  </div>`;
+  const m = openModal({ title: orig ? 'ルールを編集' : 'ルールを追加', body, wide: true, foot: '<button class="btn" data-close>キャンセル</button><button class="btn primary" data-k="ok">保存</button>' });
+  if (r.target === 'row') $('#re-target', m).value = 'row';
+  function swatches(el, list, key) {
+    const cur = r.style[key] || '';
+    el.innerHTML = `<button class="swatch none${!cur ? ' on' : ''}" data-sw="${key}" data-c="" data-tip="なし"></button>` + list.map(c => `<button class="swatch${cur === c ? ' on' : ''}" style="--c:${c}" data-sw="${key}" data-c="${c}"></button>`).join('') + `<input type="color" data-swc="${key}" value="${esc(cur || (key === 'bg' ? '#ffffff' : '#1d1d1b'))}" style="width:28px;height:24px;border:none;padding:0;background:none" data-tip="好きな色を指定">`;
+  }
+  function condRow(c, n) {
+    const f = fieldById(c.fieldId);
+    const ops = opsFor(f);
+    if (!ops.find(o => o[0] === c.op)) c.op = ops[0] ? ops[0][0] : '';
+    const op = ops.find(o => o[0] === c.op);
+    let val = '';
+    const kind = op ? op[2] : '';
+    if (kind === 'o') { if (!optById(f, c.value)) c.value = (f.options || [])[0] ? f.options[0].id : ''; val = `<select class="sel" data-ck="value" data-n="${n}">${(f.options || []).map(o => `<option value="${esc(o.id)}"${o.id === c.value ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`; }
+    else if (kind === 'd') val = `<input class="inp" style="width:72px" data-ck="value" data-n="${n}" inputmode="numeric" value="${esc(c.value == null ? 3 : c.value)}"> 日`;
+    else if (kind === 'D') val = `<input class="inp" type="date" data-ck="value" data-n="${n}" value="${esc(c.value || '')}">`;
+    else if (kind === 'n') val = `<input class="inp" style="width:100px" data-ck="value" data-n="${n}" inputmode="decimal" value="${esc(c.value == null ? '' : c.value)}">`;
+    else if (kind === 't') val = `<input class="inp" data-ck="value" data-n="${n}" value="${esc(c.value == null ? '' : c.value)}">`;
+    if (kind === 'd' && c.value == null) c.value = 3;
+    return `<div class="cond-row"><select class="sel" data-ck="fieldId" data-n="${n}">${fields.map(x => `<option value="${esc(x.id)}"${x.id === c.fieldId ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select><select class="sel" data-ck="op" data-n="${n}">${ops.map(o => `<option value="${o[0]}"${o[0] === c.op ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>${val}<button class="iconbtn" data-k="delc" data-n="${n}" aria-label="条件を削除">×</button></div>`;
+  }
+  function draw() {
+    $('#re-conds', m).innerHTML = r.conditions.map(condRow).join('');
+    swatches($('#re-bg', m), RULE_BG, 'bg');
+    swatches($('#re-fg', m), RULE_FG, 'color');
+    preview();
+  }
+  function preview() {
+    r.style.bold = $('#re-bold', m).checked || undefined;
+    r.style.strike = $('#re-strike', m).checked || undefined;
+    $('#re-pv', m).setAttribute('style', styleCss(r.style).replace(/&quot;/g, '"'));
+    const tmp = Object.assign({}, r, { match: $('#re-match', m).value });
+    $('#re-cnt', m).textContent = `現在 ${activeIssues().filter(i => ruleMatches(tmp, i)).length}件が該当`;
+  }
+  draw();
+  m.addEventListener('change', e => {
+    const ck = e.target.dataset.ck, n = +e.target.dataset.n;
+    if (ck) {
+      const c = r.conditions[n];
+      if (ck === 'fieldId') { c.fieldId = e.target.value; c.op = ''; c.value = undefined; }
+      else if (ck === 'op') { c.op = e.target.value; c.value = undefined; }
+      else c.value = condValue(c, e.target.value);
+      if (ck !== 'value') draw(); else preview();
+    }
+    if (e.target.dataset.swc) { r.style[e.target.dataset.swc] = e.target.value; draw(); }
+    if (e.target.id === 're-bold' || e.target.id === 're-strike' || e.target.id === 're-match') preview();
+  });
+  m.addEventListener('input', e => { if (e.target.dataset.ck === 'value' && e.target.tagName === 'INPUT') { const c = r.conditions[+e.target.dataset.n]; c.value = condValue(c, e.target.value); preview(); } });
+  m.addEventListener('click', e => {
+    const k = e.target.dataset.k;
+    if (e.target.dataset.sw) { r.style[e.target.dataset.sw] = e.target.dataset.c || undefined; draw(); }
+    if (k === 'addc') { r.conditions.push({ fieldId: 'status', op: '' }); draw(); }
+    if (k === 'delc') { r.conditions.splice(+e.target.dataset.n, 1); draw(); }
+    if (k === 'ok') {
+      const name = $('#re-name', m).value.trim();
+      if (!name) return toast('ルール名を入力してください', true);
+      if (!r.conditions.length) return toast('条件を1つ以上追加してください', true);
+      r.name = name; r.match = $('#re-match', m).value; r.target = $('#re-target', m).value;
+      for (const k2 of Object.keys(r.style)) if (!r.style[k2]) delete r.style[k2];
+      for (const c of r.conditions) if (c.value === undefined) delete c.value;
+      mutate(() => {
+        if (orig) { const t = doc.rules.find(x => x.id === orig.id); Object.assign(t, r); }
+        else { r.order = activeRules().length; doc.rules.push(r); }
+      });
+      closeModal(m);
+      if (after) after();
+    }
+  });
+}
+
+/* ============================================================
+   取り込み・書き出し・設定・使い方
+   ============================================================ */
+function guessType(values) {
+  const v = values.map(x => String(x).trim()).filter(Boolean);
+  if (!v.length) return 'text';
+  if (v.every(x => /^[-+]?[\d,，]+(\.\d+)?$/.test(toHalf(x)))) return 'number';
+  if (v.every(x => /^\d{4}[\/\-.年]\d{1,2}[\/\-.月]\d{1,2}/.test(toHalf(x)))) return 'date';
+  if (v.some(x => x.includes('\n'))) return 'longtext';
+  const uniq = new Set(v);
+  if (v.length >= 4 && uniq.size <= Math.min(12, Math.ceil(v.length / 2))) return 'select';
+  return 'text';
+}
+function openImport(initialText) {
+  const body = `<p style="margin-top:0">Excelで表の範囲（見出しの行を含む）をコピーして、下に貼り付けてください。CSVファイルも読み込めます。</p>
+    <textarea class="inp" id="im-text" style="min-height:120px;font-family:ui-monospace,monospace;font-size:12px" placeholder="ここに貼り付け（Ctrl+V）"></textarea>
+    <div style="display:flex;gap:12px;align-items:center;margin:8px 0 12px;flex-wrap:wrap"><label class="btn sm">CSVファイルを選ぶ<input type="file" id="im-file" accept=".csv,.tsv,.txt" hidden></label><label><input type="checkbox" id="im-head" checked> 1行目は見出し</label><span class="hint" id="im-info"></span></div>
+    <div id="im-map"></div>`;
+  const m = openModal({ title: 'Excel・CSVから取り込む', body, wide: true, foot: '<button class="btn" data-close>キャンセル</button><button class="btn primary" data-k="ok" disabled>取り込む</button>' });
+  const ta = $('#im-text', m);
+  let rows = [], mapping = [];
+  function parse() {
+    const t = ta.value;
+    rows = t.trim() ? parseDelimited(t, t.includes('\t') ? '\t' : ',').filter(r => r.some(c => String(c).trim())) : [];
+    const head = $('#im-head', m).checked;
+    const headers = head && rows.length ? rows[0] : (rows[0] || []).map((_, n) => `列${n + 1}`);
+    const data = head ? rows.slice(1) : rows;
+    const width = Math.max(0, ...rows.map(r => r.length));
+    const fs = activeFields().filter(f => !f.readonly);
+    mapping = [];
+    let html = '';
+    if (rows.length) {
+      html = '<table class="map-tbl"><thead><tr><th>取り込む列</th><th>例</th><th>取り込み先</th></tr></thead><tbody>';
+      for (let c = 0; c < width; c++) {
+        const name = String(headers[c] || `列${c + 1}`).trim();
+        const samples = data.slice(0, 3).map(r => r[c] || '').filter(Boolean);
+        const ex = fs.find(f => f.name === name) || (/^(件名|タイトル|題名|課題|内容|概要)$/.test(name) ? fieldById('title') : null) || (/^(状態|ステータス|進捗|状況)$/.test(name) ? fieldById('status') : null);
+        const skip = /^(id|no\.?|番号|#|№)$/i.test(name);
+        const def = skip ? 'skip' : ex ? ex.id : 'new';
+        mapping.push({ c, name, target: def, type: guessType(data.map(r => r[c] || '')) });
+        html += `<tr><td>${esc(name)}</td><td class="smp" title="${esc(samples.join(' / '))}">${esc(samples.join(' / '))}</td><td><select class="sel" data-mc="${c}"><option value="skip"${def === 'skip' ? ' selected' : ''}>取り込まない</option>${fs.map(f => `<option value="${esc(f.id)}"${def === f.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}<option value="new"${def === 'new' ? ' selected' : ''}>＋ 新しい項目にする</option></select> <select class="sel" data-mt="${c}" style="${def === 'new' ? '' : 'display:none'}">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${k === mapping[c].type ? ' selected' : ''}>${v}</option>`).join('')}</select></td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    $('#im-map', m).innerHTML = html;
+    $('#im-info', m).textContent = rows.length ? `${data.length}行・${width}列` : '';
+    $('[data-k=ok]', m).disabled = !data.length;
+  }
+  ta.addEventListener('input', parse);
+  if (initialText) { ta.value = initialText; parse(); }
+  $('#im-head', m).addEventListener('change', parse);
+  $('#im-file', m).addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const buf = await f.arrayBuffer();
+    let text = new TextDecoder('utf-8').decode(buf);
+    if (text.includes('�')) { try { text = new TextDecoder('shift_jis').decode(buf); } catch (er) { /* そのまま */ } }
+    ta.value = text.replace(/^﻿/, ''); parse();
+  });
+  m.addEventListener('change', e => {
+    if (e.target.dataset.mc != null) { const mp = mapping[+e.target.dataset.mc]; mp.target = e.target.value; $(`[data-mt="${mp.c}"]`, m).style.display = mp.target === 'new' ? '' : 'none'; }
+    if (e.target.dataset.mt != null) mapping[+e.target.dataset.mt].type = e.target.value;
+  });
+  m.addEventListener('click', e => {
+    if (e.target.dataset.k !== 'ok') return;
+    const used = mapping.filter(x => x.target !== 'skip');
+    const dup = used.filter(x => x.target !== 'new').map(x => x.target).filter((t, n, a) => a.indexOf(t) !== n);
+    if (dup.length) return toast('同じ項目に2つ以上の列が割り当てられています', true);
+    const head = $('#im-head', m).checked;
+    const data = head ? rows.slice(1) : rows;
+    let bad = 0;
+    mutate(() => {
+      for (const mp of used) {
+        if (mp.target !== 'new') continue;
+        const nf = { id: 'f' + uid().slice(0, 8), name: mp.name, type: mp.type, order: 0, width: mp.type === 'longtext' ? 240 : 130 };
+        if (nf.type === 'select' || nf.type === 'multiselect') nf.options = [];
+        insertField(nf); mp.target = nf.id;
+      }
+      for (const r of data) {
+        const vals = {};
+        for (const mp of used) {
+          const f = fieldById(mp.target);
+          const c = convertInput(f, r[mp.c] || '', true);
+          if (c.ok) { if (!isEmpty(c.value)) vals[f.id] = c.value; } else bad++;
+        }
+        newIssue(vals);
+      }
+    });
+    closeModal(m);
+    toast(`${data.length}件の課題を取り込みました${bad ? `（読み取れなかったセル ${bad}個）` : ''}`, bad > 0);
+  });
+}
+function exportCsv() {
+  const fs = activeFields();
+  const q = s => { s = String(s == null ? '' : s); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = [fs.map(f => q(f.name)).join(',')];
+  for (const i of activeIssues().sort((a, b) => a.no - b.no)) lines.push(fs.map(f => q(f.type === 'no' ? i.no : f.type === 'checkbox' ? (getVal(i, f) ? '○' : '') : displayText(i, f))).join(','));
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${doc.settings.title || '課題管理表'}_${today().replace(/-/g, '')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function openSettings() {
+  const fs = activeFields();
+  const optsOf = (types, cur, allowNone) => (allowNone ? '<option value="">（使わない）</option>' : '') + fs.filter(f => types.includes(f.type) && !SYS_PROP[f.id]).map(f => `<option value="${esc(f.id)}"${f.id === cur ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
+  const s = doc.settings;
+  const body = `<div class="frm">
+    <label>管理表の名前</label><div><input class="inp" id="st-title" value="${esc(s.title)}"></div>
+    <label>あなたの名前</label><div><input class="inp" id="st-me" value="${esc(me)}" style="max-width:240px"><div class="hint">更新者として記録されます。このPCのブラウザに覚えておきます。</div></div>
+    <label>自動保存</label><div><label><input type="checkbox" id="st-auto"${prefs.autosave ? ' checked' : ''}> 変更したらすぐ保存する</label><div class="hint">オフにすると、保存ボタン（Ctrl+S）を押したときだけ保存します。</div></div>
+    <label>期限の項目</label><div><select class="sel" id="st-due">${optsOf(['date'], s.dueField, true)}</select><div class="hint">期限切れ・期限が近い課題の集計に使います。</div></div>
+    <label>担当者の項目</label><div><select class="sel" id="st-asg">${optsOf(['user'], s.assigneeField, true)}</select><div class="hint">「自分の担当」の絞り込みに使います。</div></div>
+    <label>カードに出す項目</label><div class="ms">${fs.filter(f => f.id !== 'no' && f.id !== 'title').map(f => `<label><input type="checkbox" data-cf="${esc(f.id)}"${(s.cardFields || []).includes(f.id) ? ' checked' : ''}> ${esc(f.name)}</label>`).join('')}</div>
+  </div>`;
+  const m = openModal({ title: '設定', body, foot: '<button class="btn" data-close>キャンセル</button><button class="btn primary" data-k="ok">保存</button>' });
+  m.addEventListener('click', e => {
+    if (e.target.dataset.k !== 'ok') return;
+    setMe($('#st-me', m).value.trim());
+    prefs.autosave = $('#st-auto', m).checked; LS.set('kk-prefs', prefs);
+    mutate(() => {
+      doc.settings.title = $('#st-title', m).value.trim() || '課題管理表';
+      doc.settings.dueField = $('#st-due', m).value;
+      doc.settings.assigneeField = $('#st-asg', m).value;
+      doc.settings.cardFields = $$('[data-cf]:checked', m).map(x => x.dataset.cf);
+    });
+    closeModal(m); renderAll();
+  });
+}
+function setMe(name) { me = name; LS.set('kk-user', me); }
+function askName() {
+  const m = openModal({
+    title: 'はじめに', closable: false,
+    body: `<p style="margin-top:0">課題を誰が更新したか記録するために、あなたの名前を入力してください。</p><input class="inp" id="nm" placeholder="例: 山田" autofocus><p class="hint">このPCのブラウザに覚えておきます。あとで「メニュー → 設定」から変更できます。</p>`,
+    foot: '<button class="btn primary" data-k="ok">はじめる</button>',
+  });
+  const go = () => { const v = $('#nm', m).value.trim(); if (!v) return toast('名前を入力してください', true); setMe(v); closeModal(m); renderAll(); };
+  m.addEventListener('click', e => { if (e.target.dataset.k === 'ok') go(); });
+  $('#nm', m).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) go(); });
+}
+function openHelp() {
+  openModal({ title: '使い方', wide: true, foot: '<button class="btn primary" data-close>閉じる</button>', body: `<div class="help">
+    <h3>保存と共有</h3>
+    <ul><li>データはこのHTMLファイルの中に保存されます。ファイルを共有フォルダやOneDriveなどに置けば、チームで使えます。</li>
+    <li>最初に保存するとき、保存先として<b>このHTMLファイル自身</b>を選んでください。2回目からは「許可」を押すだけです。</li>
+    <li>開いている間は数秒おきにファイルを確認し、他の人が保存した内容を自動で取り込みます。同じ課題の同じ項目を同時に変更したときだけ、どちらを残すか選べます。</li>
+    <li>OneDriveなどの同期が衝突して「ファイル名-PC名.html」のようなコピーができたときは、「メニュー → 別の管理表ファイルから取り込む」でコピーの内容を取り込めます。</li>
+    <li>Chrome または Edge で使ってください。</li></ul>
+    <h3>一覧での操作（Excelと同じ感覚で）</h3>
+    <ul><li>セルをダブルクリック、または選んで <kbd>Enter</kbd> / 文字を入力すると編集できます。<kbd>Tab</kbd> で右へ、<kbd>Esc</kbd> で取り消し。</li>
+    <li><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> でセルを移動、<kbd>Delete</kbd> で消去、<kbd>Ctrl+C</kbd> / <kbd>Ctrl+V</kbd> でコピー・貼り付け。Excelから複数行を貼り付けると、足りない行は新しい課題になります。</li>
+    <li><kbd>Ctrl+Z</kbd> で元に戻す、<kbd>Ctrl+Y</kbd> でやり直し、<kbd>Ctrl+S</kbd> で保存。</li>
+    <li>列の見出しをクリックで並べ替え、▾ から絞り込みや列の設定。見出しの右端をドラッグすると列幅を変えられます。</li></ul>
+    <h3>項目と色分け</h3>
+    <ul><li>「項目の管理」や見出しの ＋ から、自由に項目を追加できます。選択肢の項目は、入力時に新しい値を打てばその場で選択肢が増えます。</li>
+    <li>「色分けルール」で、条件に合う行やセルに色を付けられます（例: 期限切れで未完了なら赤）。上にあるルールが優先されます。</li></ul>
+  </div>` });
+}
+function openMenu(anchor) {
+  const item = (k, ic, label, extra = '') => `<button class="mi${extra}" data-mk="${k}"><span class="ic">${ic}</span>${label}</button>`;
+  const p = openPopover(anchor, [
+    item('connect', '📄', file.handle ? '保存先のファイルを選び直す' : '保存先にこのファイルを選ぶ'),
+    item('saveas', '⧉', '名前を付けて保存…'),
+    item('blank', '＋', '新しい管理表を作る…'),
+    '<hr>',
+    item('import', '⇣', 'Excel・CSVから取り込む…'),
+    item('csv', '⇡', 'CSVで書き出す'),
+    item('merge', '⇄', '別の管理表ファイルから取り込む…'),
+    '<hr>',
+    item('fields', '☰', '項目の管理'),
+    item('rules', '◐', '色分けルール'),
+    item('settings', '⚙', '設定'),
+    item('help', '?', '使い方'),
+  ].join(''), { align: 'right', minWidth: 240 });
+  p.addEventListener('click', e => {
+    const b = e.target.closest('[data-mk]'); if (!b) return;
+    closePopover();
+    ({
+      connect: async () => { const h = await pickFile(); if (h) connect(h); },
+      saveas: saveAs, blank: createBlank, import: () => openImport(), csv: exportCsv, merge: importOtherFile,
+      fields: openFields, rules: openRules, settings: openSettings, help: openHelp,
+    })[b.dataset.mk]();
+  });
+}
+function openColMenu(anchor, fid) {
+  const f = fieldById(fid); if (!f) return;
+  const vals = new Map();
+  for (const i of activeIssues()) for (const k of filterKeys(i, f)) vals.set(k, (vals.get(k) || 0) + 1);
+  let keys = Array.from(vals.keys());
+  if (f.type === 'select') { const order = (f.options || []).map(o => o.label); keys.sort((a, b) => (a === '' ? 1e9 : order.indexOf(a)) - (b === '' ? 1e9 : order.indexOf(b))); }
+  else keys.sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'ja', { numeric: true })));
+  const cur = ui.filters[fid] ? new Set(ui.filters[fid]) : null;
+  const html = `<button class="mi" data-ck="asc"><span class="ic">↑</span>昇順に並べ替え</button><button class="mi" data-ck="desc"><span class="ic">↓</span>降順に並べ替え</button><hr>
+    <div class="sec">絞り込み</div><input class="pop-search" placeholder="値を検索"><div class="pop-list">
+    <label><input type="checkbox" data-all checked> <b>（すべて選択）</b></label>
+    ${keys.map(k => `<label data-key="${esc(k)}"><input type="checkbox" value="${esc(k)}"${!cur || cur.has(k) ? ' checked' : ''}> ${k === '' ? '<span class="muted">（空欄）</span>' : esc(k)} <span class="muted">${vals.get(k)}</span></label>`).join('')}
+    </div><div class="pop-foot"><button class="btn sm" data-ck="clear">解除</button><button class="btn sm primary" data-ck="apply">絞り込む</button></div><hr>
+    ${f.readonly ? '' : '<button class="mi" data-ck="edit"><span class="ic">✎</span>列の設定（名前・種類・選択肢）</button>'}
+    <button class="mi" data-ck="left"><span class="ic">←</span>左へ移動</button><button class="mi" data-ck="right"><span class="ic">→</span>右へ移動</button>
+    ${f.id === 'no' || f.id === 'title' ? '' : '<button class="mi" data-ck="hide"><span class="ic">◌</span>この列を隠す</button>'}
+    ${f.system ? '' : '<button class="mi danger" data-ck="del"><span class="ic">×</span>この項目を削除</button>'}`;
+  const p = openPopover(anchor, html, { minWidth: 260 });
+  const allBox = $('[data-all]', p);
+  const syncAll = () => { const bs = $$('.pop-list label[data-key] input', p).filter(b => b.closest('label').style.display !== 'none'); allBox.checked = bs.every(b => b.checked); };
+  syncAll();
+  $('.pop-search', p).addEventListener('input', e => { const q = e.target.value.toLowerCase(); $$('.pop-list label[data-key]', p).forEach(l => { l.style.display = l.dataset.key.toLowerCase().includes(q) ? '' : 'none'; }); syncAll(); });
+  p.addEventListener('change', e => { if (e.target.hasAttribute('data-all')) $$('.pop-list label[data-key]', p).filter(l => l.style.display !== 'none').forEach(l => { l.querySelector('input').checked = e.target.checked; }); else syncAll(); });
+  p.addEventListener('click', async e => {
+    const k = e.target.closest('[data-ck]') && e.target.closest('[data-ck]').dataset.ck; if (!k) return;
+    if (k === 'asc' || k === 'desc') { ui.sort = { fid, dir: k === 'asc' ? 1 : -1 }; closePopover(); renderView(); return; }
+    if (k === 'clear') { delete ui.filters[fid]; closePopover(); renderAll(); return; }
+    if (k === 'apply') {
+      const q = $('.pop-search', p).value.toLowerCase();
+      const on = $$('.pop-list label[data-key]', p).filter(l => l.querySelector('input').checked && (!q || l.dataset.key.toLowerCase().includes(q))).map(l => l.dataset.key);
+      if (on.length === keys.length) delete ui.filters[fid]; else ui.filters[fid] = on;
+      closePopover(); renderAll(); return;
+    }
+    closePopover();
+    if (k === 'edit') openFieldEditor(fid);
+    if (k === 'left' || k === 'right') moveField(fid, k === 'left' ? -1 : 1, visibleFields());
+    if (k === 'hide') mutate(() => { fieldById(fid).hidden = true; });
+    if (k === 'del' && await confirmModal('項目を削除', `項目「${f.name}」を削除しますか？\nこの項目に入力された内容は表示されなくなります。`, '削除する')) deleteField(fid);
+  });
+  setTimeout(() => $('.pop-search', p).focus(), 0);
+}
+function openColumns(anchor) {
+  const p = openPopover(anchor, `<div class="sec">一覧に表示する列</div><div class="pop-list">${activeFields().map(f => `<label><input type="checkbox" data-fid="${esc(f.id)}"${f.hidden ? '' : ' checked'}${f.id === 'no' || f.id === 'title' ? ' disabled' : ''}> ${esc(f.name)}</label>`).join('')}</div>`, { align: 'right' });
+  p.addEventListener('change', e => {
+    const fid = e.target.dataset.fid; if (!fid) return;
+    const before = snapshot();
+    fieldById(fid).hidden = !e.target.checked;
+    undoStack.push(before); redoStack = [];
+    renderTable(); renderStatus(); scheduleAutosave();
+  });
+}
+function addSample() {
+  const t = today();
+  const st = statusField(), pr = fieldById('priority');
+  const sid = n => (st && st.options[n] ? st.options[n].id : null), pid = n => (pr && pr.options[n] ? pr.options[n].id : null);
+  const rows = [
+    ['ログイン画面でエラーメッセージが表示されない', sid(1), '佐藤', addDays(t, -3), pid(0)],
+    ['帳票のPDF出力でレイアウトが崩れる', sid(0), '鈴木', addDays(t, 2), pid(0)],
+    ['検索結果の並び順を日付順にしたい', sid(0), '高橋', addDays(t, 10), pid(1)],
+    ['マスタ登録画面の入力チェック追加', sid(2), '佐藤', addDays(t, 1), pid(1)],
+    ['操作マニュアルの更新', sid(1), '田中', addDays(t, 5), pid(2)],
+    ['テスト環境のデータ初期化', sid(3), '鈴木', addDays(t, -7), pid(2)],
+    ['CSV取り込み時の文字化け', sid(1), '高橋', addDays(t, -1), pid(0)],
+    ['権限ごとのメニュー表示の確認', sid(0), '', '', pid(1)],
+  ];
+  mutate(() => { for (const r of rows) newIssue({ title: r[0], status: r[1], assignee: r[2], due: r[3], priority: r[4] }); });
+}
+
+/* ============================================================
+   イベント
+   ============================================================ */
+document.addEventListener('click', async e => {
+  const t = e.target;
+  const tab = t.closest('.tab');
+  if (tab) { ui.view = tab.dataset.view; prefs.view = ui.view; LS.set('kk-prefs', prefs); ui.sel = null; main.innerHTML = ''; renderAll(); return; }
+  const qc = t.closest('[data-quick]');
+  if (qc) { ui.quick = qc.dataset.quick; renderAll(); return; }
+  const qg = t.closest('[data-quick-go]');
+  if (qg) { ui.quick = qg.dataset.quickGo === 'all' ? 'all' : qg.dataset.quickGo; ui.view = 'table'; main.innerHTML = ''; renderAll(); return; }
+  const a = t.closest('[data-act]');
+  if (!a || a.closest('.modal') || a.closest('.pop')) return;
+  const act = a.dataset.act;
+  switch (act) {
+    case 'save': save(); break;
+    case 'menu': openMenu(a); break;
+    case 'new': openForm(null); break;
+    case 'open': openForm(a.dataset.iid); break;
+    case 'connect': { const h = await pickFile(); if (h) connect(h); break; }
+    case 'reconnect': if (storedHandle) connect(storedHandle, { askName: false }); break;
+    case 'reperm': if (await hasPerm(file.handle, true)) { file.perm = true; renderAll(); poll(); } break;
+    case 'takeRemote': if (file.pendingRemote) { if (isDirty()) { if (await mergeIn(file.pendingRemote) && prefs.autosave) scheduleAutosave(200); } else receiveRemote(file.pendingRemote); } break;
+    case 'columns': openColumns(a); break;
+    case 'rules': openRules(); break;
+    case 'fields': openFields(); break;
+    case 'settings': openSettings(); break;
+    case 'import': openImport(); break;
+    case 'sample': addSample(); break;
+    case 'clearFilter': delete ui.filters[a.dataset.fid]; renderAll(); break;
+    case 'clearAll': ui.filters = {}; ui.quick = 'all'; ui.search = ''; renderAll(); break;
+    case 'colmenu': openColMenu(a, a.dataset.fid); break;
+    case 'sort': { const fid = a.dataset.fid; ui.sort = ui.sort.fid === fid ? { fid, dir: -ui.sort.dir } : { fid, dir: 1 }; renderView(); break; }
+    case 'addfield': openFieldEditor(null); break;
+    case 'addrow': { let id; mutate(() => { id = newIssue({}).id; }); ui.sel = { iid: id, fid: 'title' }; applySel(); startEdit(id, 'title'); break; }
+    case 'toggle': { const td = a.closest('td'); if (td) { ui.sel = { iid: td.dataset.iid, fid: td.dataset.fid }; startEdit(td.dataset.iid, td.dataset.fid); } break; }
+    case 'kadd': { const f = kanbanField(); openForm(null, a.dataset.key ? { [f.id]: a.dataset.key } : {}); break; }
+  }
+});
+main.addEventListener('mousedown', e => {
+  const td = e.target.closest('td[data-fid]');
+  if (!td || e.target.closest('[data-act]')) return;
+  e.preventDefault();
+  if (ui.editing && !ui.editing.choice) endEdit(true);
+  const same = ui.sel && ui.sel.iid === td.dataset.iid && ui.sel.fid === td.dataset.fid;
+  ui.sel = { iid: td.dataset.iid, fid: td.dataset.fid };
+  applySel(false);
+  if (same && e.detail === 1) { const f = fieldById(td.dataset.fid); if (f && (f.type === 'select' || f.type === 'user' || f.type === 'multiselect')) startEdit(td.dataset.iid, td.dataset.fid); }
+});
+main.addEventListener('dblclick', e => {
+  const td = e.target.closest('td[data-fid]');
+  if (!td || e.target.closest('[data-act]')) return;
+  const f = fieldById(td.dataset.fid);
+  if (f && f.readonly) { openForm(td.dataset.iid); return; }
+  if (!ui.editing) startEdit(td.dataset.iid, td.dataset.fid);
+});
+main.addEventListener('click', e => {
+  const card = e.target.closest('.kcard');
+  if (card) openForm(card.dataset.iid);
+});
+// 列幅の変更
+main.addEventListener('mousedown', e => {
+  const rz = e.target.closest('.resizer'); if (!rz) return;
+  e.preventDefault(); e.stopPropagation();
+  const fid = rz.dataset.fid, th = rz.closest('th');
+  const idx = Array.from(th.parentNode.children).indexOf(th);
+  const col = th.closest('table').querySelectorAll('col')[idx];
+  const x0 = e.clientX, w0 = th.offsetWidth;
+  rz.classList.add('drag');
+  const mv = ev => { col.style.width = Math.max(48, w0 + ev.clientX - x0) + 'px'; };
+  const up = ev => {
+    document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+    rz.classList.remove('drag');
+    const w = Math.max(48, Math.round(w0 + ev.clientX - x0));
+    if (w !== w0) mutate(() => { fieldById(fid).width = w; });
+  };
+  document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+}, true);
+// カンバンのドラッグ
+main.addEventListener('dragstart', e => { const c = e.target.closest('.kcard'); if (!c) return; e.dataTransfer.setData('text/x-issue', c.dataset.iid); e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); });
+main.addEventListener('dragend', e => { const c = e.target.closest('.kcard'); if (c) c.classList.remove('dragging'); $$('.kcards.over').forEach(x => x.classList.remove('over')); });
+main.addEventListener('dragover', e => { const z = e.target.closest('.kcards'); if (!z) return; e.preventDefault(); $$('.kcards.over').forEach(x => x !== z && x.classList.remove('over')); z.classList.add('over'); });
+main.addEventListener('drop', e => {
+  const z = e.target.closest('.kcards'); if (!z) return;
+  e.preventDefault(); z.classList.remove('over');
+  const iid = e.dataTransfer.getData('text/x-issue'); if (!iid) return;
+  const f = kanbanField();
+  setValues(iid, { [f.id]: z.dataset.key || null });
+});
+document.addEventListener('input', e => { if (e.target.id === 'searchBox') { ui.search = e.target.value; renderView(); } });
+document.addEventListener('change', e => {
+  if (e.target.id === 'kanbanField') mutate(() => { doc.settings.kanbanField = e.target.value; });
+  if (e.target.id === 'groupField') mutate(() => { doc.settings.groupField = e.target.value; });
+  if (e.target.id === 'titleInput') { const v = e.target.value.trim() || '課題管理表'; mutate(() => { doc.settings.title = v; }); }
+});
+$('#titleInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) e.target.blur(); });
+
+function inTextInput(el) { return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable); }
+document.addEventListener('keydown', e => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); if (ui.editing && !ui.editing.choice) endEdit(true); save(); return; }
+  if (e.key === 'Escape' && activePop) { closePopover(); return; }
+  if (e.key === 'Escape' && openModals.length) { const m = openModals[openModals.length - 1]; if (m._closable) closeModal(m); return; }
+  if (openModals.length || ui.editing || activePop) return;
+  if (inTextInput(document.activeElement) && document.activeElement !== catcher) return;
+  if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  if (mod && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); return; }
+  if (ui.view !== 'table') return;
+  if (!ui.sel) { if (e.key.startsWith('Arrow') && ui.rowIds.length) { e.preventDefault(); ui.sel = { iid: ui.rowIds[0], fid: ui.colIds[Math.min(1, ui.colIds.length - 1)] }; applySel(); } return; }
+  const k = e.key;
+  if (k === 'ArrowDown') { e.preventDefault(); moveSel(1, 0); }
+  else if (k === 'ArrowUp') { e.preventDefault(); moveSel(-1, 0); }
+  else if (k === 'ArrowLeft') { e.preventDefault(); moveSel(0, -1); }
+  else if (k === 'ArrowRight') { e.preventDefault(); moveSel(0, 1); }
+  else if (k === 'Tab') { e.preventDefault(); moveSel(0, e.shiftKey ? -1 : 1); }
+  else if (k === 'Enter' || k === 'F2') {
+    e.preventDefault();
+    if (ui.sel.fid === 'no') openForm(ui.sel.iid); else startEdit(ui.sel.iid, ui.sel.fid);
+  }
+  else if (k === 'Delete' || k === 'Backspace') {
+    e.preventDefault();
+    const f = fieldById(ui.sel.fid);
+    if (f && !f.readonly) setValues(ui.sel.iid, { [f.id]: null });
+  }
+  else if (k === ' ' && (fieldById(ui.sel.fid) || {}).type === 'checkbox') { e.preventDefault(); startEdit(ui.sel.iid, ui.sel.fid); }
+  else if (k.length === 1 && !mod && !e.altKey && !e.isComposing && e.keyCode !== 229) {
+    const f = fieldById(ui.sel.fid);
+    if (f && !f.readonly && f.type !== 'checkbox') { e.preventDefault(); startEdit(ui.sel.iid, ui.sel.fid, k); }
+  }
+});
+document.addEventListener('copy', e => {
+  if (ui.view !== 'table' || !ui.sel || ui.editing || openModals.length || (inTextInput(document.activeElement) && document.activeElement !== catcher)) return;
+  if (String(window.getSelection())) return;
+  const i = issueById(ui.sel.iid), f = fieldById(ui.sel.fid);
+  if (!i || !f) return;
+  e.preventDefault();
+  e.clipboardData.setData('text/plain', f.type === 'no' ? String(i.no) : displayText(i, f));
+});
+document.addEventListener('paste', e => {
+  if (ui.view !== 'table' || ui.editing || openModals.length || (inTextInput(document.activeElement) && document.activeElement !== catcher)) return;
+  const text = e.clipboardData.getData('text/plain');
+  if (!text) return;
+  e.preventDefault();
+  pasteGrid(text.replace(/\r?\n$/, ''));
+});
+document.addEventListener('scroll', e => { if (ui.editing && !ui.editing.choice && e.target.id === 'tableWrap') endEdit(true); }, true);
+window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('focus', () => poll());
+setInterval(poll, POLL_MS);
+setInterval(() => { if (ui.view === 'dash' && !openModals.length && !activePop) renderView(); }, 60000);
+
+/* ---------- 起動 ---------- */
+(async function boot() {
+  renderAll();
+  if (!me) askName();
+  if (!FS) return;
+  const h = await idb.get(handleKey());
+  if (!h) return;
+  storedHandle = h;
+  if (await hasPerm(h, false)) await connect(h, { askName: false });
+  else renderBanners();
+})();
+
+// 動作確認用のフック
+window.__kk = { get doc() { return doc; }, get base() { return base; }, file, ui, prefs, mergeDocs, save, poll, connect, convertInput, parseDelimited, ruleMatches };
+})();
+</script>
+</body>
+</html>
