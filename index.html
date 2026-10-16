@@ -483,21 +483,20 @@ function fmt(f, v) {
     case 'date': return String(v).replace(/-/g, '/');
     case 'datetime': return fmtDateTime(v);
     case 'number': return Number(v).toLocaleString('ja-JP', { maximumFractionDigits: 10 });
-    case 'link': return v.title || prettyUrl(v.url);
+    case 'link': return v.title || linkDomain(v.url);
     default: return String(v);
   }
 }
 /* ---------- リンク ---------- */
 function safeHref(u) { const s = String(u || '').trim(); return /^(https?:|mailto:|file:)/i.test(s) ? s : null; }
-function prettyUrl(u) {
-  try {
-    const x = new URL(u);
-    if (x.protocol === 'mailto:') return x.pathname;
-    let path = decodeURIComponent(x.pathname + x.search);
-    if (path === '/') path = '';
-    const s = x.host + path;
-    return s.length > 70 ? s.slice(0, 68) + '…' : s;
-  } catch (e) { return String(u || ''); }
+// タイトルが取れなかったときの表示名：ドメイン（スキーマの後から最初の / まで）
+function linkDomain(u) {
+  const s = String(u || '').trim();
+  const m = s.match(/^[a-z][\w+.-]*:\/\/([^\/?#]*)/i);
+  if (m && m[1]) return m[1];
+  if (/^mailto:/i.test(s)) return s.slice(7).split('?')[0];
+  // file:///C:/… のようにドメインがない場合は、ファイル名を表示する
+  try { const p = decodeURIComponent(new URL(s).pathname).split('/').filter(Boolean); return p[p.length - 1] || s; } catch (e) { return s; }
 }
 function parseLinkText(raw) {
   const t = String(raw || '').trim();
@@ -1560,7 +1559,7 @@ function openLinkEditor(anchor, i, f, initial) {
     const t = await getTitle(l.url);
     if (!pop.isConnected || my !== seq) return;
     if (t) { ti.value = t; titleTouched = true; st.textContent = ''; }
-    else st.textContent = 'このページのタイトルは自動で取得できませんでした。表示する名前を入力してください（空欄ならURLを表示します）。';
+    else st.textContent = `このページのタイトルは自動で取得できませんでした。空欄のままならドメイン（${linkDomain(l.url)}）を表示します。`;
   }
   ti.addEventListener('input', () => { titleTouched = !!ti.value.trim(); });
   u.addEventListener('change', () => tryFetch(false));
@@ -2491,7 +2490,7 @@ function openHelp() {
     <li>親子は2階層までです。親の行の ▼ で子の課題を隠せます。件名の右の「1/3」は、子の課題の完了数です。</li>
     <li>見出しをクリックして並べ替えているときは、ツールバーの「並べ替え」の × で手動の並び順に戻ります。</li></ul>
     <h3>リンクと複数行テキスト</h3>
-    <ul><li>「リンク」の項目にURLを入れると、ページのタイトルを自動で取得して表示します。サイトによっては取得できないので、そのときは名前を入力してください。ブラウザのアドレスバーやページ上のリンクをセルにドラッグすると、タイトルも一緒に入ります。</li>
+    <ul><li>「リンク」の項目にURLを入れると、ページのタイトルを自動で取得して表示します。サイトによっては取得できないので、そのときはドメイン（例: www.example.com）を表示します。名前を入力して変えることもできます。ブラウザのアドレスバーやページ上のリンクをセルにドラッグすると、タイトルも一緒に入ります。</li>
     <li>複数行テキストは、すべての行を表示します。セルの ▼ で1行だけの表示に、見出しの ⊟ で列全体を切り替えられます。</li></ul>
     <h3>項目と色分け</h3>
     <ul><li>「項目の管理」や見出しの ＋ から、自由に項目を追加できます。選択肢の項目は、入力時に新しい値を打てばその場で選択肢が増えます。</li>
