@@ -120,7 +120,14 @@ body.row-dragging,body.row-dragging *{cursor:grabbing!important}
 .kcard.drop-before{box-shadow:0 -3px 0 0 var(--accent)}
 .kcards.drop-end::after{content:'';display:block;height:3px;background:var(--accent);border-radius:2px;flex:none}
 .kc-lt{white-space:pre-wrap;word-break:break-word}
-.link-in{display:grid;gap:6px}
+.le{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow:auto;align-items:flex-start}
+.le-row{display:flex;gap:6px;align-items:flex-start;border:1px solid var(--border);border-radius:8px;padding:8px;width:100%;background:var(--surface-2)}
+.le-in{flex:1;display:grid;gap:6px;min-width:0}
+.le-st{min-height:16px;line-height:16px;font-size:11px;margin-top:-2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lnks{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lnks a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grid td.t-link{white-space:normal}
+.kc-meta .lnks{display:inline-flex;flex-direction:row;flex-wrap:wrap;gap:2px 10px}
 .kid-list{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
 .kid-list button{display:flex;gap:8px;align-items:center;border:none;background:none;padding:3px 6px;border-radius:5px;text-align:left}
 .kid-list button:hover{background:var(--hover)}
@@ -369,6 +376,8 @@ function relTime(ms) {
   return fmtDateTime(ms).slice(0, 10);
 }
 const isEmpty = v => v == null || v === '' || v === false || (Array.isArray(v) && v.length === 0) || (typeof v === 'object' && !Array.isArray(v) && !v.url);
+// リンクの値は [{url, title}, …]。古い形式（1件だけのオブジェクト）も配列として扱う
+const linksOf = v => (Array.isArray(v) ? v : v && v.url ? [v] : []).filter(l => l && l.url);
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 保存できない環境では無視 */ } },
@@ -428,6 +437,10 @@ function normalize(d) {
   d.rules = Array.isArray(d.rules) ? d.rules : [];
   d.issues = Array.isArray(d.issues) ? d.issues : [];
   for (const i of d.issues) { if (!i.values) i.values = {}; if (typeof i.rank !== 'number') i.rank = i.no || 0; }
+  for (const f of d.fields) if (f.type === 'link') for (const i of d.issues) {
+    const v = i.values[f.id];
+    if (v != null && !Array.isArray(v)) { if (v.url) i.values[f.id] = [v]; else delete i.values[f.id]; }
+  }
   const nf = d.fields.find(f => f.id === 'no');
   if (nf && (!nf.width || nf.width < 96)) nf.width = 100;
   return d;
@@ -483,12 +496,13 @@ function fmt(f, v) {
     case 'date': return String(v).replace(/-/g, '/');
     case 'datetime': return fmtDateTime(v);
     case 'number': return Number(v).toLocaleString('ja-JP', { maximumFractionDigits: 10 });
-    case 'link': return v.title || linkDomain(v.url);
+    case 'link': return linksOf(v).map(linkLabel).join(', ');
     default: return String(v);
   }
 }
 /* ---------- リンク ---------- */
 function safeHref(u) { const s = String(u || '').trim(); return /^(https?:|mailto:|file:)/i.test(s) ? s : null; }
+const linkLabel = l => l.title || linkDomain(l.url);
 // タイトルが取れなかったときの表示名：ドメイン（スキーマの後から最初の / まで）
 function linkDomain(u) {
   const s = String(u || '').trim();
@@ -507,19 +521,38 @@ function parseLinkText(raw) {
   if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(t) && !/^\d+(\.\d+)*$/.test(t)) return { url: 'https://' + t, title: '' };
   return null;
 }
-// ドラッグ＆ドロップや貼り付けのデータから、リンク（とページのタイトル）を取り出す
-function linkFromData(dt) {
-  if (!dt) return null;
+// 複数のリンクを含む文字列（1行に1つ、または空白区切りのURL）を読み取る
+function parseLinksText(raw) {
+  const out = [];
+  for (const line of String(raw || '').split(/\r?\n|\s*[、,]\s*(?=(?:https?:\/\/|mailto:|file:))/i)) {
+    if (!line.trim()) continue;
+    const urls = line.match(/(?:https?:\/\/|mailto:|file:)[^\s)）>」]+/gi) || [];
+    if (urls.length > 1 && !line.replace(/(?:https?:\/\/|mailto:|file:)[^\s)）>」]+/gi, '').trim()) urls.forEach(u => out.push({ url: u, title: '' }));
+    else { const l = parseLinkText(line); if (!l) return null; out.push(l); }
+  }
+  return out;
+}
+// ドラッグ＆ドロップや貼り付けのデータから、リンク（とページのタイトル）を取り出す。複数あればすべて
+function linksFromData(dt, richOnly) {
+  if (!dt) return [];
   const html = dt.getData('text/html');
   if (html) {
-    const a = new DOMParser().parseFromString(html, 'text/html').querySelector('a[href]');
-    if (a && safeHref(a.getAttribute('href'))) {
-      const href = a.getAttribute('href'), text = (a.textContent || '').trim().replace(/\s+/g, ' ');
-      return { url: href, title: text === href ? '' : text };
-    }
+    const as = [...new DOMParser().parseFromString(html, 'text/html').querySelectorAll('a[href]')].filter(a => safeHref(a.getAttribute('href')));
+    if (as.length) return as.map(a => { const href = a.getAttribute('href'), text = (a.textContent || '').trim().replace(/\s+/g, ' '); return { url: href, title: text === href ? '' : text }; });
   }
-  const uri = (dt.getData('text/uri-list') || '').split(/\r?\n/).find(x => x && !x.startsWith('#'));
-  return parseLinkText(uri || dt.getData('text/plain'));
+  const uris = (dt.getData('text/uri-list') || '').split(/\r?\n/).filter(x => x && !x.startsWith('#'));
+  if (uris.length) return uris.map(u => ({ url: u, title: '' }));
+  if (richOnly) return [];
+  // Excel のセル内改行は "…" で囲まれて来るので、外してから読む
+  const g = parseDelimited(String(dt.getData('text/plain') || '').replace(/\r?\n$/, ''), '\t');
+  if (g.length !== 1 || g[0].length !== 1) return [];
+  return parseLinksText(g[0][0]) || [];
+}
+// 既存のリンクに追加する（同じURLは追加しない）
+function addLinks(cur, add) {
+  const out = linksOf(cur).map(l => Object.assign({}, l));
+  for (const l of add) if (!out.some(x => x.url === l.url)) out.push(l);
+  return out;
 }
 async function fetchTitle(url) {
   if (!/^https?:/i.test(url)) return null;
@@ -547,11 +580,11 @@ function queueTitles() {
   const lf = activeFields().filter(f => f.type === 'link');
   if (!lf.length) return;
   const urls = new Set();
-  for (const i of activeIssues()) for (const f of lf) { const v = i.values[f.id]; if (v && v.url && !v.title && /^https?:/i.test(v.url) && !titleCache.has(v.url)) urls.add(v.url); }
+  for (const i of activeIssues()) for (const f of lf) for (const l of linksOf(i.values[f.id])) if (!l.title && /^https?:/i.test(l.url) && !titleCache.has(l.url)) urls.add(l.url);
   for (const u of urls) getTitle(u).then(t => {
     if (!t) return;
     let ch = false;
-    for (const i of activeIssues()) for (const f of lf) { const v = i.values[f.id]; if (v && v.url === u && !v.title) { v.title = t; touch(i); ch = true; } }
+    for (const i of activeIssues()) for (const f of lf) for (const l of linksOf(i.values[f.id])) if (l.url === u && !l.title) { l.title = t; touch(i); ch = true; }
     if (ch && !ui.editing) changed();
   });
 }
@@ -617,7 +650,7 @@ function testCond(i, c) {
   const f = fieldById(c.fieldId);
   if (!f) return false;
   const v = getVal(i, f);
-  const s = (f.type === 'link' ? (v ? (v.title || '') + ' ' + (v.url || '') : '') : String(v == null ? '' : v)).toLowerCase();
+  const s = (f.type === 'link' ? linksOf(v).map(l => linkLabel(l) + ' ' + l.url).join(' ') : String(v == null ? '' : v)).toLowerCase();
   const cv = String(c.value == null ? '' : c.value).toLowerCase();
   const n = Number(v), cn = Number(c.value);
   const hasNum = v !== '' && v != null && !isNaN(n);
@@ -750,8 +783,8 @@ function convertInput(f, raw, autoAdd) {
     case 'longtext': return { ok: true, value: s.replace(/\s+$/, '') };
     case 'link': {
       if (!t) return { ok: true, value: null };
-      const l = parseLinkText(t);
-      return l ? { ok: true, value: l } : { ok: false };
+      const ls = parseLinksText(t);
+      return ls ? { ok: true, value: ls } : { ok: false };
     }
     default: return { ok: true, value: t };
   }
@@ -1223,6 +1256,7 @@ function renderView() {
 function filterKeys(i, f) {
   const v = getVal(i, f);
   if (f.type === 'multiselect') { const ls = (v || []).map(id => (optById(f, id) || {}).label).filter(Boolean); return ls.length ? ls : ['']; }
+  if (f.type === 'link') { const ls = linksOf(v).map(linkLabel); return ls.length ? ls : ['']; }
   if (f.type === 'datetime') return [v ? ymd(new Date(v)).replace(/-/g, '/') : ''];
   return [fmt(f, v)];
 }
@@ -1278,7 +1312,7 @@ function filteredIssues() {
     list = list.filter(i => filterKeys(i, f).some(k => set.has(k)));
   }
   const s = ui.search.trim().toLowerCase();
-  if (s) { const fs = activeFields(); list = list.filter(i => fs.some(f => displayText(i, f).toLowerCase().includes(s) || (f.type === 'link' && i.values[f.id] && String(i.values[f.id].url).toLowerCase().includes(s)))); }
+  if (s) { const fs = activeFields(); list = list.filter(i => fs.some(f => displayText(i, f).toLowerCase().includes(s) || (f.type === 'link' && linksOf(i.values[f.id]).some(l => l.url.toLowerCase().includes(s))))); }
   return list;
 }
 
@@ -1300,9 +1334,9 @@ function cellHtml(i, f) {
       return one ? `<div class="lt-wrap"><div class="lt one">${esc(lines[0])}</div><span class="lt-more">他${lines.length - 1}行</span>${btn}</div>` : `<div class="lt-wrap"><div class="lt">${esc(s)}</div>${btn}</div>`;
     }
     case 'link': {
-      if (!v || !v.url) return '';
-      const href = safeHref(v.url);
-      return href ? `<a class="lnk" href="${esc(href)}" target="_blank" rel="noopener noreferrer" data-tip="${esc(v.url)}">${esc(fmt(f, v))}</a>` : esc(fmt(f, v));
+      const ls = linksOf(v);
+      if (!ls.length) return '';
+      return '<div class="lnks">' + ls.map(l => { const href = safeHref(l.url); return href ? `<a class="lnk" href="${esc(href)}" target="_blank" rel="noopener noreferrer" data-tip="${esc(l.url)}">${esc(linkLabel(l))}</a>` : `<span>${esc(linkLabel(l))}</span>`; }).join('') + '</div>';
     }
     default: return esc(fmt(f, v));
   }
@@ -1539,68 +1573,95 @@ function openChoice(anchor, i, f, initial) {
   inp.focus();
 }
 
-/* ---------- リンクの編集 ---------- */
-function openLinkEditor(anchor, i, f, initial) {
-  const v = getVal(i, f) || {};
-  const pop = openPopover(anchor, `<div style="width:340px"><div class="sec">URL</div><input class="pop-search" data-k="url" placeholder="https://…（リンクの貼り付け・ドラッグもできます）"><div class="sec">表示する名前</div><input class="pop-search" data-k="title" placeholder="空欄ならページのタイトルを自動で取得"><div class="hint" data-k="st" style="padding:0 2px;min-height:18px"></div><div class="pop-foot">${v.url ? '<button class="btn sm danger" data-k="del" style="margin-right:auto">リンクを削除</button>' : ''}<button class="btn sm" data-k="fetch">タイトルを取得</button><button class="btn sm primary" data-k="ok">OK</button></div></div>`, { minWidth: 360, onClose: () => finish() });
-  ui.editing = { iid: i.id, fid: f.id, el: pop, choice: true };
-  const u = $('[data-k=url]', pop), ti = $('[data-k=title]', pop), st = $('[data-k=st]', pop);
-  u.value = initial != null ? initial : (v.url || '');
-  ti.value = v.title || '';
-  let commit = true, del = false, titleTouched = !!v.title, seq = 0;
-  async function tryFetch(force) {
-    const l = parseLinkText(u.value);
-    if (!l) { st.textContent = u.value.trim() ? 'URLとして読み取れません' : ''; return; }
-    if (l.title && (!titleTouched || force)) { ti.value = l.title; titleTouched = true; }
-    if (titleTouched && !force) return;
-    if (!/^https?:/i.test(l.url)) return;
-    const my = ++seq;
-    st.textContent = 'ページのタイトルを取得しています…';
-    const t = await getTitle(l.url);
-    if (!pop.isConnected || my !== seq) return;
-    if (t) { ti.value = t; titleTouched = true; st.textContent = ''; }
-    else st.textContent = `このページのタイトルは自動で取得できませんでした。空欄のままならドメイン（${linkDomain(l.url)}）を表示します。`;
+/* ---------- リンクの編集（複数） ---------- */
+// box に複数リンクの入力欄を作る。value() で {links, bad} を返す
+function linkEditor(box, links, { focus } = {}) {
+  let rows = linksOf(links).map(l => ({ url: l.url, title: l.title || '', touched: !!l.title, st: '' }));
+  rows.push({ url: '', title: '', touched: false, st: '' });
+  const blank = () => ({ url: '', title: '', touched: false, st: '' });
+  function draw(focusN) {
+    box.innerHTML = '<div class="le">' + rows.map((r, n) => `<div class="le-row"><div class="le-in"><input class="inp le-url" data-n="${n}" placeholder="https://…（リンクの貼り付け・ドラッグもできます）" value="${esc(r.url)}"><input class="inp le-title" data-n="${n}" placeholder="表示する名前（空欄ならページのタイトルを自動で取得）" value="${esc(r.title)}"><div class="hint le-st" data-n="${n}">${esc(r.st)}</div></div><button type="button" class="iconbtn" data-le="del" data-n="${n}" aria-label="このリンクを削除" data-tip="このリンクを削除">×</button></div>`).join('') + '<button type="button" class="btn sm" data-le="add">＋ リンクを追加</button></div>';
+    if (focusN != null) { const el = box.querySelector(`.le-url[data-n="${focusN}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
   }
-  ti.addEventListener('input', () => { titleTouched = !!ti.value.trim(); });
-  u.addEventListener('change', () => tryFetch(false));
-  u.addEventListener('paste', e => {
-    const l = linkFromData(e.clipboardData);
-    if (l && l.title) { e.preventDefault(); u.value = l.url; ti.value = l.title; titleTouched = true; st.textContent = ''; }
-    else setTimeout(() => tryFetch(false), 0);
+  const setSt = (n, t) => { rows[n].st = t; const el = box.querySelector(`.le-st[data-n="${n}"]`); if (el) el.textContent = t; };
+  async function tryFetch(n) {
+    const r = rows[n]; if (!r) return;
+    const l = parseLinkText(r.url);
+    if (!l) { setSt(n, r.url.trim() ? 'URLとして読み取れません' : ''); return; }
+    if (l.title && !r.touched) { r.title = l.title; r.touched = true; const ti = box.querySelector(`.le-title[data-n="${n}"]`); if (ti) ti.value = l.title; }
+    if (r.touched || !/^https?:/i.test(l.url)) return;
+    setSt(n, 'ページのタイトルを取得しています…');
+    const t = await getTitle(l.url);
+    if (rows[n] !== r || r.touched) return;
+    if (t) { r.title = t; const ti = box.querySelector(`.le-title[data-n="${n}"]`); if (ti) ti.value = t; setSt(n, ''); }
+    else setSt(n, `タイトルを取得できませんでした（空欄ならドメイン「${linkDomain(l.url)}」を表示）`);
+  }
+  // 入力済みのリンクの後ろに追加し、空の行を最後に1つ残す
+  function insertLinks(n, ls) {
+    const keep = rows.filter((r, k) => k !== n && r.url.trim());
+    const fresh = ls.filter(l => !keep.some(r => r.url === l.url)).map(l => ({ url: l.url, title: l.title || '', touched: !!l.title, st: '' }));
+    rows = keep.concat(fresh, [blank()]);
+    draw(rows.length - 1);
+    rows.forEach((r, k) => { if (r.url && !r.touched) tryFetch(k); });
+  }
+  box.addEventListener('input', e => {
+    const n = +e.target.dataset.n; if (!rows[n]) return;
+    if (e.target.classList.contains('le-url')) rows[n].url = e.target.value;
+    if (e.target.classList.contains('le-title')) { rows[n].title = e.target.value; rows[n].touched = !!e.target.value.trim(); if (rows[n].touched) setSt(n, ''); }
   });
-  pop.addEventListener('dragover', e => e.preventDefault());
-  pop.addEventListener('drop', e => {
-    const l = linkFromData(e.dataTransfer); if (!l) return;
-    e.preventDefault(); u.value = l.url;
-    if (l.title) { ti.value = l.title; titleTouched = true; st.textContent = ''; } else tryFetch(false);
+  box.addEventListener('change', e => { if (e.target.classList.contains('le-url')) tryFetch(+e.target.dataset.n); });
+  box.addEventListener('paste', e => {
+    if (!e.target.classList.contains('le-url')) return;
+    const ls = linksFromData(e.clipboardData);
+    if (ls.length > 1 || (ls.length === 1 && ls[0].title)) { e.preventDefault(); insertLinks(+e.target.dataset.n, ls); }
+    else setTimeout(() => tryFetch(+e.target.dataset.n), 0);
   });
+  box.addEventListener('dragover', e => e.preventDefault());
+  box.addEventListener('drop', e => { const ls = linksFromData(e.dataTransfer); if (!ls.length) return; e.preventDefault(); e.stopPropagation(); insertLinks(-1, ls); });
+  box.addEventListener('click', e => {
+    const b = e.target.closest('[data-le]'); if (!b) return;
+    if (b.dataset.le === 'add') { if (rows[rows.length - 1].url.trim()) rows.push(blank()); draw(rows.length - 1); }
+    if (b.dataset.le === 'del') { rows.splice(+b.dataset.n, 1); if (!rows.length || rows[rows.length - 1].url.trim()) rows.push(blank()); draw(Math.min(+b.dataset.n, rows.length - 1)); }
+  });
+  draw(focus === 'last' ? rows.length - 1 : null);
+  return {
+    value() {
+      const out = [], bad = [];
+      for (const r of rows) {
+        if (!r.url.trim()) continue;
+        const l = parseLinkText(r.url);
+        if (!l) { bad.push(r.url.trim()); continue; }
+        l.title = r.title.trim() || (r.touched ? '' : l.title) || '';
+        if (!out.some(x => x.url === l.url)) out.push(l);
+      }
+      return { links: out, bad };
+    },
+    setLast(text) { rows[rows.length - 1].url = text; rows.push(blank()); draw(rows.length - 2); },
+  };
+}
+function openLinkEditor(anchor, i, f, initial) {
+  const pop = openPopover(anchor, `<div style="width:400px"><div class="sec">リンク（いくつでも追加できます）</div><div class="le-box"></div><div class="pop-foot"><span class="hint" style="margin-right:auto">Enterで確定・Escで取り消し</span><button class="btn sm primary" data-k="ok">OK</button></div></div>`, { minWidth: 420, onClose: () => finish() });
+  ui.editing = { iid: i.id, fid: f.id, el: pop, choice: true };
+  const ed = linkEditor($('.le-box', pop), getVal(i, f), { focus: 'last' });
+  if (initial != null && initial !== '') ed.setLast(initial);
+  let commit = true;
   pop.addEventListener('keydown', e => {
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); closePopover(); moveSel(1, 0); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); commit = false; closePopover(); }
   });
-  pop.addEventListener('click', e => {
-    const k = e.target.dataset.k;
-    if (k === 'ok') closePopover();
-    if (k === 'del') { del = true; closePopover(); }
-    if (k === 'fetch') { titleTouched = false; tryFetch(true); }
-  });
+  pop.addEventListener('click', e => { if (e.target.dataset.k === 'ok') closePopover(); });
   function finish() {
     ui.editing = null;
     if (commit) mutate(() => {
       const iss = issueById(i.id); if (!iss) return;
-      const raw = u.value.trim();
-      if (del || !raw) { setValuesIn(iss, { [f.id]: null }); return; }
-      const l = parseLinkText(raw);
-      if (!l) { toast(`「${raw}」はURLとして読み取れませんでした`, true); return; }
-      l.title = ti.value.trim();
-      setValuesIn(iss, { [f.id]: l });
+      const { links, bad } = ed.value();
+      if (bad.length) toast(`URLとして読み取れなかったもの: ${bad.join('、')}`, true);
+      setValuesIn(iss, { [f.id]: links.length ? links : null });
     });
     focusCatcher();
     afterEdit();
   }
-  u.focus();
-  if (initial == null) u.select();
 }
 
 /* ---------- 行の操作（並べ替え・親子） ---------- */
@@ -1981,7 +2042,7 @@ function inputHtml(f, v, name) {
     case 'select': return `<select class="sel" ${n}><option value="">（空欄）</option>${(f.options || []).map(o => `<option value="${esc(o.id)}"${o.id === v ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}<option value="__new">＋ 新しい選択肢…</option></select>`;
     case 'multiselect': return `<div class="ms" data-name="${esc(name)}">${(f.options || []).map(o => `<label><input type="checkbox" value="${esc(o.id)}"${(v || []).includes(o.id) ? ' checked' : ''}>${pill(o)}</label>`).join('')}<button type="button" class="btn sm ghost" data-k="msadd" data-fid="${esc(f.id)}">＋ 追加</button></div>`;
     case 'user': return `<input class="inp" ${n} list="dl-users" value="${esc(v || '')}" style="max-width:240px" autocomplete="off">`;
-    case 'link': return `<div class="link-in" data-name="${esc(name)}"><input class="inp" data-part="url" placeholder="https://…（リンクの貼り付け・ドラッグもできます）" value="${esc((v && v.url) || '')}"><input class="inp" data-part="title" placeholder="表示する名前（空欄ならページのタイトルを自動で取得）" value="${esc((v && v.title) || '')}"></div>`;
+    case 'link': return `<div class="link-in" data-name="${esc(name)}"></div>`;
     default: return `<input class="inp" ${n} value="${esc(v == null ? '' : v)}">`;
   }
 }
@@ -2025,23 +2086,12 @@ function openForm(iid, preset = {}, opts = {}) {
       e.target.before(lb);
     }
   });
-  form.addEventListener('paste', e => {
-    if (e.target.dataset.part !== 'url') return;
-    const l = linkFromData(e.clipboardData); if (!l || !l.title) return;
-    e.preventDefault(); e.target.value = l.url;
-    const ti = e.target.parentNode.querySelector('[data-part=title]'); if (!ti.value) ti.value = l.title;
-  });
-  form.addEventListener('dragover', e => { if (e.target.closest('.link-in')) e.preventDefault(); });
-  form.addEventListener('drop', e => {
-    const box = e.target.closest('.link-in'); if (!box) return;
-    const l = linkFromData(e.dataTransfer); if (!l) return;
-    e.preventDefault(); box.querySelector('[data-part=url]').value = l.url;
-    if (l.title) box.querySelector('[data-part=title]').value = l.title;
-  });
+  const linkEds = {};
+  for (const f of fields) if (f.type === 'link') linkEds[f.id] = linkEditor(form.querySelector(`.link-in[data-name="f_${CSS.escape(f.id)}"]`), vals[f.id]);
   function collect() {
     const out = {};
     for (const f of fields) {
-      if (f.type === 'link') { const box = form.querySelector(`.link-in[data-name="f_${CSS.escape(f.id)}"]`); out[f.id] = { url: box.querySelector('[data-part=url]').value, title: box.querySelector('[data-part=title]').value }; continue; }
+      if (f.type === 'link') { out[f.id] = linkEds[f.id].value(); continue; }
       if (f.type === 'multiselect') { out[f.id] = $$(`.ms[data-name="f_${CSS.escape(f.id)}"] input:checked`, form).map(x => x.value); continue; }
       const el = form.querySelector(`[name="f_${CSS.escape(f.id)}"]`);
       if (!el) continue;
@@ -2064,11 +2114,8 @@ function openForm(iid, preset = {}, opts = {}) {
         if (f.type === 'multiselect') { patch[f.id] = v.map(res); continue; }
         if (f.type === 'checkbox') { patch[f.id] = v; continue; }
         if (f.type === 'link') {
-          if (!v.url.trim()) { patch[f.id] = null; continue; }
-          const l = parseLinkText(v.url);
-          if (!l) { bad.push(f.name); continue; }
-          l.title = v.title.trim() || l.title || '';
-          patch[f.id] = l; continue;
+          if (v.bad.length) bad.push(`${f.name}（${v.bad.join('、')}）`);
+          patch[f.id] = v.links.length ? v.links : null; continue;
         }
         const c = convertInput(fld, v, false);
         if (c.ok) patch[f.id] = c.value; else bad.push(f.name);
@@ -2334,7 +2381,7 @@ function openRuleEditor(rid, after) {
 function guessType(values) {
   const v = values.map(x => String(x).trim()).filter(Boolean);
   if (!v.length) return 'text';
-  if (v.every(x => /^(https?:\/\/|mailto:)\S+$/i.test(x))) return 'link';
+  if (v.every(x => /^(https?:\/\/|mailto:)/i.test(x) && parseLinksText(x))) return 'link';
   if (v.every(x => /^[-+]?[\d,，]+(\.\d+)?$/.test(toHalf(x)))) return 'number';
   if (v.every(x => /^\d{4}[\/\-.年]\d{1,2}[\/\-.月]\d{1,2}/.test(toHalf(x)))) return 'date';
   if (v.some(x => x.includes('\n'))) return 'longtext';
@@ -2424,7 +2471,7 @@ function exportCsv() {
   const fs = activeFields();
   const q = s => { s = String(s == null ? '' : s); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const t = treeInfo();
-  const cell = (i, f) => { const v = getVal(i, f); if (f.type === 'no') return i.no; if (f.type === 'checkbox') return v ? '○' : ''; if (f.type === 'link') return v && v.url ? (v.title ? `${v.title} (${v.url})` : v.url) : ''; return displayText(i, f); };
+  const cell = (i, f) => { const v = getVal(i, f); if (f.type === 'no') return i.no; if (f.type === 'checkbox') return v ? '○' : ''; if (f.type === 'link') return linksOf(v).map(l => (l.title ? `${l.title} (${l.url})` : l.url)).join('\n'); return displayText(i, f); };
   const lines = [['ID', '親ID'].concat(fs.filter(f => f.id !== 'no').map(f => f.name)).map(q).join(',')];
   for (const r of treeRows(activeIssues(), { expandAll: true }).rows) { const i = r.i, p = t.parentOf(i); lines.push([i.no, p ? p.no : ''].concat(fs.filter(f => f.id !== 'no').map(f => cell(i, f))).map(q).join(',')); }
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
@@ -2491,6 +2538,7 @@ function openHelp() {
     <li>見出しをクリックして並べ替えているときは、ツールバーの「並べ替え」の × で手動の並び順に戻ります。</li></ul>
     <h3>リンクと複数行テキスト</h3>
     <ul><li>「リンク」の項目にURLを入れると、ページのタイトルを自動で取得して表示します。サイトによっては取得できないので、そのときはドメイン（例: www.example.com）を表示します。名前を入力して変えることもできます。ブラウザのアドレスバーやページ上のリンクをセルにドラッグすると、タイトルも一緒に入ります。</li>
+    <li>1つのセルにリンクをいくつでも入れられます。セルにリンクを貼り付けたりドラッグしたりすると、今あるリンクの後ろに追加されます。リンクを消すときは、セルを編集して × を押します（<kbd>Delete</kbd> ですべて消去）。</li>
     <li>複数行テキストは、すべての行を表示します。セルの ▼ で1行だけの表示に、見出しの ⊟ で列全体を切り替えられます。</li></ul>
     <h3>項目と色分け</h3>
     <ul><li>「項目の管理」や見出しの ＋ から、自由に項目を追加できます。選択肢の項目は、入力時に新しい値を打てばその場で選択肢が増えます。</li>
@@ -2710,10 +2758,12 @@ main.addEventListener('dragover', e => {
 main.addEventListener('drop', e => {
   const td = e.target.closest('td.t-link');
   if (td && !e.dataTransfer.types.includes('text/x-issue')) {
-    const l = linkFromData(e.dataTransfer); if (!l) return;
+    const ls = linksFromData(e.dataTransfer); if (!ls.length) return;
     e.preventDefault();
     ui.sel = { iid: td.dataset.iid, fid: td.dataset.fid };
-    setValues(td.dataset.iid, { [td.dataset.fid]: l });
+    const i = issueById(td.dataset.iid);
+    setValues(td.dataset.iid, { [td.dataset.fid]: addLinks(i && i.values[td.dataset.fid], ls) });
+    toast(ls.length > 1 ? `${ls.length}件のリンクを追加しました` : 'リンクを追加しました');
     return;
   }
   const z = e.target.closest('.kcards'); if (!z) return;
@@ -2793,9 +2843,10 @@ document.addEventListener('copy', e => {
   if (!i || !f) return;
   e.preventDefault();
   const v = getVal(i, f);
-  if (f.type === 'link' && v && v.url) {
-    e.clipboardData.setData('text/plain', v.url);
-    if (safeHref(v.url)) e.clipboardData.setData('text/html', `<a href="${esc(v.url)}">${esc(fmt(f, v))}</a>`);
+  if (f.type === 'link' && linksOf(v).length) {
+    const ls = linksOf(v);
+    e.clipboardData.setData('text/plain', ls.map(l => l.url).join('\n'));
+    e.clipboardData.setData('text/html', ls.filter(l => safeHref(l.url)).map(l => `<a href="${esc(l.url)}">${esc(linkLabel(l))}</a>`).join('<br>'));
     return;
   }
   e.clipboardData.setData('text/plain', f.type === 'no' ? String(i.no) : displayText(i, f));
@@ -2804,10 +2855,16 @@ document.addEventListener('paste', e => {
   if (ui.view !== 'table' || ui.editing || openModals.length || (inTextInput(document.activeElement) && document.activeElement !== catcher)) return;
   const text = e.clipboardData.getData('text/plain');
   const sf = ui.sel && fieldById(ui.sel.fid);
-  if (sf && sf.type === 'link' && !String(text).trim().includes('\n')) {
-    // リンクを含む文章（Webページからのコピーなど）なら、タイトルも一緒に入れる
-    const l = linkFromData(e.clipboardData);
-    if (l) { e.preventDefault(); setValues(ui.sel.iid, { [sf.id]: l }); return; }
+  if (sf && sf.type === 'link') {
+    // リンクのセルに貼り付けたときは、今のリンクに追加する。Webページからのコピーならリンクの文字をタイトルに使う
+    const ls = linksFromData(e.clipboardData);
+    if (ls.length) {
+      e.preventDefault();
+      const i = issueById(ui.sel.iid);
+      setValues(ui.sel.iid, { [sf.id]: addLinks(i && i.values[sf.id], ls) });
+      toast(ls.length > 1 ? `${ls.length}件のリンクを追加しました` : 'リンクを追加しました');
+      return;
+    }
   }
   if (!text) return;
   e.preventDefault();
@@ -2832,7 +2889,7 @@ setInterval(() => { if (ui.view === 'dash' && !openModals.length && !activePop) 
 })();
 
 // 動作確認用のフック
-window.__kk = { get doc() { return doc; }, get base() { return base; }, file, ui, prefs, mergeDocs, save, poll, connect, convertInput, parseDelimited, ruleMatches };
+window.__kk = { normalize, get doc() { return doc; }, get base() { return base; }, file, ui, prefs, mergeDocs, save, poll, connect, convertInput, parseDelimited, ruleMatches };
 })();
 </script>
 </body>
