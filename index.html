@@ -124,9 +124,13 @@ body.row-dragging,body.row-dragging *{cursor:grabbing!important}
 .le-row{display:flex;gap:6px;align-items:flex-start;border:1px solid var(--border);border-radius:8px;padding:8px;width:100%;background:var(--surface-2)}
 .le-in{flex:1;display:grid;gap:6px;min-width:0}
 .le-st{min-height:16px;line-height:16px;font-size:11px;margin-top:-2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lnks{display:flex;flex-direction:column;gap:2px;min-width:0}
-.lnks a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.grid td.t-link{white-space:normal}
+.lnks{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.lnks a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.grid td.t-link{white-space:normal;position:relative}
+.grid td.t-link .lnks{padding-right:22px}
+.lnk-add{position:absolute;top:5px;right:4px;width:22px;height:22px;border:1px solid var(--border-strong);border-radius:5px;background:#fff;color:var(--accent-ink);font-size:14px;line-height:1;padding:0;opacity:0;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.grid tr:hover td.t-link .lnk-add,.grid td.t-link.sel .lnk-add,.lnk-add:focus-visible{opacity:1}
+.lnk-add:hover{background:var(--accent-weak);border-color:var(--accent)}
 .kc-meta .lnks{display:inline-flex;flex-direction:row;flex-wrap:wrap;gap:2px 10px}
 .kid-list{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
 .kid-list button{display:flex;gap:8px;align-items:center;border:none;background:none;padding:3px 6px;border-radius:5px;text-align:left}
@@ -1317,7 +1321,7 @@ function filteredIssues() {
 }
 
 /* ---------- 一覧 ---------- */
-function cellHtml(i, f) {
+function cellHtml(i, f, opts = {}) {
   const v = getVal(i, f);
   if (f.id === 'no') return `<div class="no-cell"><span class="grip" data-grip="${i.id}" data-tip="ドラッグで並べ替え">⋮⋮</span><button class="no-link" data-act="open" data-iid="${i.id}" data-tip="詳細を開く">#${v}</button><button class="row-menu" data-act="rowmenu" data-iid="${i.id}" aria-label="行のメニュー">⋯</button></div>`;
   switch (f.type) {
@@ -1335,8 +1339,9 @@ function cellHtml(i, f) {
     }
     case 'link': {
       const ls = linksOf(v);
-      if (!ls.length) return '';
-      return '<div class="lnks">' + ls.map(l => { const href = safeHref(l.url); return href ? `<a class="lnk" href="${esc(href)}" target="_blank" rel="noopener noreferrer" data-tip="${esc(l.url)}">${esc(linkLabel(l))}</a>` : `<span>${esc(linkLabel(l))}</span>`; }).join('') + '</div>';
+      const add = opts.noAdd || f.readonly ? '' : `<button class="lnk-add" data-act="linkadd" data-iid="${i.id}" data-fid="${esc(f.id)}" data-tip="リンクを追加" aria-label="リンクを追加">＋</button>`;
+      if (!ls.length) return add;
+      return add + '<div class="lnks">' + ls.map(l => { const href = safeHref(l.url); return href ? `<a class="lnk" href="${esc(href)}" target="_blank" rel="noopener noreferrer" data-tip="${esc(l.url)}">${esc(linkLabel(l))}</a>` : `<span>${esc(linkLabel(l))}</span>`; }).join('') + '</div>';
     }
     default: return esc(fmt(f, v));
   }
@@ -1855,7 +1860,7 @@ function renderKanban() {
         const st = styleCss(rs.cells[cf.id]);
         if (cf.type === 'select') { const o = optById(cf, v); return o ? `<span style="${st}">${pill(o)}</span>` : ''; }
         if (cf.type === 'multiselect') return `<span style="${st}">${v.map(id => optById(cf, id)).filter(Boolean).map(pill).join(' ')}</span>`;
-        if (cf.type === 'link') return `<span style="${st}"><span class="lbl">${esc(cf.name)}</span>${cellHtml(i, cf)}</span>`;
+        if (cf.type === 'link') return `<span style="${st}"><span class="lbl">${esc(cf.name)}</span>${cellHtml(i, cf, { noAdd: true })}</span>`;
         if (cf.type === 'longtext') { const lines = String(v).split('\n'); const one = !!(prefs.ltCollapsed || {})[cf.id]; return `<span style="${st};flex-basis:100%"><span class="lbl">${esc(cf.name)}</span><span class="kc-lt">${esc(one ? lines[0] : v)}</span>${one && lines.length > 1 ? ` <span class="muted">他${lines.length - 1}行</span>` : ''}</span>`; }
         return `<span style="${st}"><span class="lbl">${esc(cf.name)}</span>${esc(fmt(cf, v))}</span>`;
       }).join('');
@@ -2538,7 +2543,7 @@ function openHelp() {
     <li>見出しをクリックして並べ替えているときは、ツールバーの「並べ替え」の × で手動の並び順に戻ります。</li></ul>
     <h3>リンクと複数行テキスト</h3>
     <ul><li>「リンク」の項目にURLを入れると、ページのタイトルを自動で取得して表示します。サイトによっては取得できないので、そのときはドメイン（例: www.example.com）を表示します。名前を入力して変えることもできます。ブラウザのアドレスバーやページ上のリンクをセルにドラッグすると、タイトルも一緒に入ります。</li>
-    <li>1つのセルにリンクをいくつでも入れられます。セルにリンクを貼り付けたりドラッグしたりすると、今あるリンクの後ろに追加されます。リンクを消すときは、セルを編集して × を押します（<kbd>Delete</kbd> ですべて消去）。</li>
+    <li>リンクのセルにマウスを乗せると右上に <b>＋</b> が出ます。押すと、今のリンクの後ろに新しいリンクを入力できます。1つのセルにリンクをいくつでも入れられます。セルにリンクを貼り付けたりドラッグしたりすると、今あるリンクの後ろに追加されます。リンクを消すときは、セルを編集して × を押します（<kbd>Delete</kbd> ですべて消去）。</li>
     <li>複数行テキストは、すべての行を表示します。セルの ▼ で1行だけの表示に、見出しの ⊟ で列全体を切り替えられます。</li></ul>
     <h3>項目と色分け</h3>
     <ul><li>「項目の管理」や見出しの ＋ から、自由に項目を追加できます。選択肢の項目は、入力時に新しい値を打てばその場で選択肢が増えます。</li>
@@ -2680,6 +2685,7 @@ document.addEventListener('click', async e => {
     case 'addfield': openFieldEditor(null); break;
     case 'addrow': { let id; mutate(() => { id = newIssue({}).id; }); ui.sel = { iid: id, fid: 'title' }; applySel(); startEdit(id, 'title'); break; }
     case 'rowmenu': openRowMenu(a, a.dataset.iid); break;
+    case 'linkadd': { if (ui.editing && !ui.editing.choice) endEdit(true); ui.sel = { iid: a.dataset.iid, fid: a.dataset.fid }; applySel(false); startEdit(a.dataset.iid, a.dataset.fid); break; }
     case 'tg': { const id = a.dataset.iid; if (collapsedParents.has(id)) collapsedParents.delete(id); else collapsedParents.add(id); saveCollapsed(); renderView(); break; }
     case 'lttg': { const k = a.dataset.iid + ':' + a.dataset.fid; ui.ltOpen.set(k, !ltCollapsed(a.dataset.iid, a.dataset.fid)); renderView(); break; }
     case 'ltcol': { const fid = a.dataset.fid; prefs.ltCollapsed = Object.assign({}, prefs.ltCollapsed); prefs.ltCollapsed[fid] = !prefs.ltCollapsed[fid]; for (const k of [...ui.ltOpen.keys()]) if (k.endsWith(':' + fid)) ui.ltOpen.delete(k); LS.set('kk-prefs', prefs); renderView(); break; }
