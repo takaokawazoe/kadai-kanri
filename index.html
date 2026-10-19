@@ -1002,13 +1002,27 @@ async function writeFile(handle, html) {
   await w.write(new Blob([html], { type: 'text/html' }));
   await w.close();
 }
-async function hasPerm(h, request) {
-  try {
-    const o = { mode: 'readwrite' };
-    if ((await h.queryPermission(o)) === 'granted') return true;
-    if (request) return (await h.requestPermission(o)) === 'granted';
-  } catch (e) { /* 権限の確認に失敗 */ }
-  return false;
+// ファイル操作で起きたエラーを覚えておく（動作チェックとエラー表示で使う）
+let lastFsError = null;
+function noteFsError(step, e) { lastFsError = { step, name: (e && e.name) || 'Error', message: (e && e.message) || String(e), at: Date.now() }; }
+// 書き込みの許可の状態: 'granted' | 'prompt' | 'denied' | 'error'
+async function permState(h, request) {
+  const o = { mode: 'readwrite' };
+  try { const q = await h.queryPermission(o); if (q === 'granted' || !request) return q; }
+  catch (e) { noteFsError('queryPermission', e); return 'error'; }
+  try { return await h.requestPermission(o); }
+  catch (e) { noteFsError('requestPermission', e); return 'error'; }
+}
+async function hasPerm(h, request) { return (await permState(h, request)) === 'granted'; }
+const browserName = () => { const ua = navigator.userAgent; const m = ua.match(/Edg\/([\d.]+)/) || ua.match(/Chrome\/([\d.]+)/); return (/Edg\//.test(ua) ? 'Microsoft Edge ' : /Chrome\//.test(ua) ? 'Google Chrome ' : 'その他のブラウザ ') + (m ? m[1] : ''); };
+function fsErrorModal(title, state) {
+  const e = lastFsError;
+  const isEdge = /Edg\//.test(navigator.userAgent);
+  const detail = e ? `\n\n【エラーの内容】${e.step}: ${e.name}${e.message ? ' — ' + e.message : ''}` : '';
+  const why = state === 'denied'
+    ? '書き込みが「ブロック」されています。一度ブロックすると、ページを開き直すまで許可を求め直せません。'
+    : '考えられる原因:\n・会社の管理設定（ブラウザのポリシー）で、Webページからのファイルの読み書きが禁止されている\n・ブラウザの設定で「ファイルの編集」がブロックになっている（' + (isEdge ? 'Edge: 設定 → Cookie とサイトのアクセス許可 → ファイルの編集' : 'Chrome: 設定 → プライバシーとセキュリティ → サイトの設定 → ファイルの編集') + '）';
+  alertModal(title, `${why}\n\n「メニュー → 動作チェック」で、どこで止まっているかを確認できます。保存できない間は「メニュー → CSVで書き出す」でデータを持ち出せます。${detail}`);
 }
 const idb = {
   open() { return new Promise((res, rej) => { const r = indexedDB.open('kadai-kanri', 1); r.onupgradeneeded = () => r.result.createObjectStore('handles'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
@@ -1023,13 +1037,26 @@ async function pickFile() {
   try {
     const [h] = await window.showOpenFilePicker({ multiple: false, types: [{ description: '課題管理表（HTML）', accept: { 'text/html': ['.html', '.htm'] } }] });
     return h;
-  } catch (e) { return null; }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return null;   // ファイルを選ばずに閉じた
+    noteFsError('showOpenFilePicker', e);
+    fsErrorModal('ファイルを選ぶ画面を開けませんでした');
+    return null;
+  }
 }
 async function connect(h, { askName = true } = {}) {
-  if (!h || !(await hasPerm(h, true))) { toast('ファイルへのアクセスが許可されませんでした', true); return false; }
+  if (!h) return false;
+  // 書き込みの許可を求める。ここで許可が得られなくても（ブラウザによっては、ファイルを選んだ直後は
+  // 許可を求められないことがある）、読み込みまでは進めて「保存を許可する」ボタンで求め直せるようにする
+  const ps = await permState(h, true);
   let f, text, remote;
   try { f = await h.getFile(); text = await f.text(); remote = extractData(text); }
-  catch (e) { toast('ファイルを読み込めませんでした。同期中か、壊れている可能性があります。', true); return false; }
+  catch (e) {
+    noteFsError('getFile', e);
+    if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) fsErrorModal('ファイルを読み込む許可がありません', ps);
+    else toast('ファイルを読み込めませんでした。同期中か、壊れている可能性があります。', true);
+    return false;
+  }
   if (remote === undefined) { alertModal('このファイルは課題管理表ではないようです。', '今開いている課題管理表のHTMLファイルを選んでください。'); return false; }
   const cur = currentFileName();
   if (askName && cur && f.name !== cur && !(await confirmModal('別の名前のファイルが選ばれました', `今開いているファイルは「${cur}」ですが、「${f.name}」が選ばれました。このファイルに保存しますか？`, 'このファイルに保存する'))) return false;
@@ -1040,11 +1067,16 @@ async function connect(h, { askName = true } = {}) {
     } else if (!(await confirmModal('別の管理表のファイルです', `選んだファイル「${f.name}」は、今開いている管理表とは別の管理表です。選んだファイルの内容を読み込みますか？${isDirty() ? '\n（保存していない変更は失われます）' : ''}`, '読み込む'))) return false;
     else { doc = clone(remote); base = clone(remote); undoStack = []; redoStack = []; }
   }
-  file.handle = h; file.name = f.name; file.lastModified = f.lastModified; file.perm = true; file.error = '';
+  file.handle = h; file.name = f.name; file.lastModified = f.lastModified; file.perm = ps === 'granted'; file.error = '';
   storedHandle = h;
   idb.set(handleKey(), h);
   if (remote) await receiveRemote(remote, { quiet: !remote.meta.saveId || remote.meta.saveId === base.meta.saveId });
   renderAll();
+  if (!file.perm) {
+    if (ps === 'denied') fsErrorModal('ファイルへの書き込みが許可されませんでした', ps);
+    else toast(`「${f.name}」を読み込みました。保存するには、上の「保存を許可する」を押してください`);
+    return true;
+  }
   toast(`「${f.name}」に接続しました`);
   if (isDirty()) scheduleAutosave(300);
   return true;
@@ -1085,7 +1117,9 @@ async function save({ auto = false } = {}) {
     if (!isDirty()) return;
   }
   if (file.saving) { file.again = true; return; }
-  if (!(await hasPerm(file.handle, !auto))) { file.perm = false; renderAll(); return; }
+  { const ps = await permState(file.handle, !auto);
+    if (ps !== 'granted') { file.perm = false; renderAll(); if (!auto) fsErrorModal('このファイルに保存できませんでした', ps); return; }
+    if (!file.perm) file.perm = true; }
   if (auto && ui.editing) { scheduleAutosave(); return; }
   file.saving = true; renderStatus();
   try {
@@ -1222,7 +1256,7 @@ function renderBanners() {
   if (!FS) h += `<div class="banner err">このブラウザではファイルに保存できません。<b>Chrome または Edge</b> で開いてください。</div>`;
   else if (!file.handle && storedHandle) h += `<div class="banner info">前回このファイルに接続した設定が残っています。<button class="btn sm primary" data-act="reconnect">接続して保存できるようにする</button></div>`;
   else if (!file.handle && (isDirty() || doc.issues.length)) h += `<div class="banner info">保存するには、このHTMLファイル自身を保存先に選びます（最初の1回だけ）。<button class="btn sm primary" data-act="connect">保存先にこのファイルを選ぶ</button></div>`;
-  if (file.handle && !file.perm) h += `<div class="banner">ファイルへのアクセス許可が切れました。<button class="btn sm primary" data-act="reperm">許可する</button></div>`;
+  if (file.handle && !file.perm) h += `<div class="banner">「${esc(file.name)}」に保存するには、書き込みの許可が必要です。<button class="btn sm primary" data-act="reperm">保存を許可する</button></div>`;
   if (file.pendingRemote) {
     const r = file.pendingRemote;
     h += `<div class="banner"><span><b>${esc(r.meta.savedBy || '誰か')}</b> さんが ${fmtTime(r.meta.savedAt)} に管理表を更新しました。${isDirty() ? 'あなたの未保存の変更と合わせて取り込みます。' : ''}</span><button class="btn sm primary" data-act="takeRemote">取り込む</button></div>`;
@@ -2550,6 +2584,53 @@ function openHelp() {
     <li>「色分けルール」で、条件に合う行やセルに色を付けられます（例: 期限切れで未完了なら赤）。上にあるルールが優先されます。</li></ul>
   </div>` });
 }
+/* ---------- 動作チェック（保存できないとき） ---------- */
+function openDiag() {
+  const yes = v => (v ? '✓ はい' : '✗ いいえ');
+  const info = [
+    ['ブラウザ', browserName()],
+    ['開いている場所', location.protocol === 'file:' ? 'PCのファイル（file://）' : location.origin],
+    ['安全な環境（isSecureContext）', yes(window.isSecureContext)],
+    ['ファイルを選ぶ機能（showOpenFilePicker）', yes(FS)],
+    ['接続中のファイル', file.handle ? `${file.name}（書き込み: ${file.perm ? '許可済み' : '未許可'}）` : 'なし'],
+    ['前回のエラー', lastFsError ? `${lastFsError.step}: ${lastFsError.name} — ${lastFsError.message}（${fmtTime(lastFsError.at)}）` : 'なし'],
+  ];
+  const body = `<p style="margin-top:0">ファイルへの保存がうまくいかないときの確認画面です。「読み書きを試す」を押して、この管理表のHTMLファイルを選んでください。ファイルの中身は書き換えません。</p>
+    <table class="map-tbl"><tbody>${info.map(r => `<tr><th style="width:42%">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join('')}</tbody></table>
+    <h3 style="font-size:14px;margin:16px 0 6px">読み書きのテスト</h3><div id="dg-out" class="hint" style="white-space:pre-wrap;font-size:13px;color:var(--text)">まだ実行していません</div>`;
+  const m = openModal({ title: '動作チェック', wide: true, body, foot: '<div class="left"><button class="btn" data-k="copy">結果をコピー</button></div><button class="btn" data-close>閉じる</button><button class="btn primary" data-k="run">読み書きを試す</button>' });
+  const out = $('#dg-out', m);
+  let lines = [];
+  const step = (ok, label, extra) => { lines.push(`${ok === null ? '・' : ok ? '✓' : '✗'} ${label}${extra ? ' — ' + extra : ''}`); out.textContent = lines.join('\n'); };
+  const err = e => `${(e && e.name) || 'Error'}${e && e.message ? ': ' + e.message : ''}`;
+  m.addEventListener('click', async e => {
+    const k = e.target.dataset.k;
+    if (k === 'copy') {
+      const text = info.map(r => `${r[0]}: ${r[1]}`).join('\n') + '\n\n' + (lines.join('\n') || '（テスト未実行）') + '\n' + navigator.userAgent;
+      try { await navigator.clipboard.writeText(text); toast('結果をコピーしました'); } catch (er) { prompt('この内容をコピーしてください', text); }
+      return;
+    }
+    if (k !== 'run') return;
+    lines = [];
+    if (!FS) { step(false, 'ファイルを選ぶ機能がありません', 'Chrome または Edge で開いてください'); return; }
+    let h;
+    try { [h] = await window.showOpenFilePicker({ multiple: false, types: [{ description: '課題管理表（HTML）', accept: { 'text/html': ['.html', '.htm'] } }] }); step(true, 'ファイルを選ぶ', h.name); }
+    catch (er) { step(false, 'ファイルを選ぶ', er.name === 'AbortError' ? '選ばずに閉じられました' : err(er)); return; }
+    try { step(true, '読み込みの許可', await h.queryPermission({ mode: 'read' })); } catch (er) { step(false, '読み込みの許可', err(er)); }
+    let q;
+    try { q = await h.queryPermission({ mode: 'readwrite' }); step(q === 'granted' ? true : null, '書き込みの許可（確認）', q); } catch (er) { step(false, '書き込みの許可（確認）', err(er)); }
+    if (q !== 'granted') {
+      try { const r = await h.requestPermission({ mode: 'readwrite' }); step(r === 'granted', '書き込みの許可（お願い）', r); }
+      catch (er) { step(false, '書き込みの許可（お願い）', err(er)); }
+    }
+    try { const f = await h.getFile(); const t = await f.text(); step(true, 'ファイルの読み込み', `${Math.round(t.length / 1024)}KB・${extractData(t) === undefined ? '課題管理表ではありません' : '課題管理表です'}`); }
+    catch (er) { step(false, 'ファイルの読み込み', err(er)); }
+    try { const w = await h.createWritable({ keepExistingData: true }); await w.abort(); step(true, '書き込みの準備（中身は変えずに取り消し）'); }
+    catch (er) { step(false, '書き込みの準備', err(er)); }
+    lines.push('', lines.some(l => l.startsWith('✗')) ? '✗ の行で止まっています。「結果をコピー」で内容を送ってください。' : 'すべて問題ありません。このファイルに保存できるはずです。');
+    out.textContent = lines.join('\n');
+  });
+}
 function openMenu(anchor) {
   const item = (k, ic, label, extra = '') => `<button class="mi${extra}" data-mk="${k}"><span class="ic">${ic}</span>${label}</button>`;
   const p = openPopover(anchor, [
@@ -2565,6 +2646,7 @@ function openMenu(anchor) {
     item('rules', '◐', '色分けルール'),
     item('settings', '⚙', '設定'),
     item('help', '?', '使い方'),
+    item('diag', '✚', '動作チェック（保存できないとき）'),
   ].join(''), { align: 'right', minWidth: 240 });
   p.addEventListener('click', e => {
     const b = e.target.closest('[data-mk]'); if (!b) return;
@@ -2572,7 +2654,7 @@ function openMenu(anchor) {
     ({
       connect: async () => { const h = await pickFile(); if (h) connect(h); },
       saveas: saveAs, blank: createBlank, import: () => openImport(), csv: exportCsv, merge: importOtherFile,
-      fields: openFields, rules: openRules, settings: openSettings, help: openHelp,
+      fields: openFields, rules: openRules, settings: openSettings, help: openHelp, diag: openDiag,
     })[b.dataset.mk]();
   });
 }
@@ -2670,7 +2752,12 @@ document.addEventListener('click', async e => {
     case 'open': openForm(a.dataset.iid); break;
     case 'connect': { const h = await pickFile(); if (h) connect(h); break; }
     case 'reconnect': if (storedHandle) connect(storedHandle, { askName: false }); break;
-    case 'reperm': if (await hasPerm(file.handle, true)) { file.perm = true; renderAll(); poll(); } break;
+    case 'reperm': {
+      const ps = await permState(file.handle, true);
+      if (ps === 'granted') { file.perm = true; renderAll(); toast('保存できるようになりました'); poll(); if (isDirty()) scheduleAutosave(300); }
+      else fsErrorModal('書き込みの許可が得られませんでした', ps);
+      break;
+    }
     case 'takeRemote': if (file.pendingRemote) { if (isDirty()) { if (await mergeIn(file.pendingRemote) && prefs.autosave) scheduleAutosave(200); } else receiveRemote(file.pendingRemote); } break;
     case 'columns': openColumns(a); break;
     case 'rules': openRules(); break;
